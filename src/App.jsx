@@ -14,13 +14,13 @@ export default function WebAppShop() {
   const [error, setError] = useState(null);
   const [user, setUser] = useState({ id: "", username: "" });
 
+  // ✅ Өнімдерді жүктеу
   const fetchProducts = async () => {
     try {
       const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
       const data = await response.json();
 
       const formatted = data.map(item => {
-        console.log("imageURL:", item.imageURL);
         const isDriveLink = item.imageURL.includes("drive.google.com");
         const imageURL = isDriveLink
           ? `https://drive.google.com/uc?export=view&id=${item.imageURL.split("/d/")[1].split("/")[0]}`
@@ -46,28 +46,30 @@ export default function WebAppShop() {
     }
   };
 
+  // ✅ Telegram WebApp арқылы келген user дерегін алу
   useEffect(() => {
-  if (window.Telegram?.WebApp) {
-    window.Telegram.WebApp.ready();
+    fetchProducts();
 
-    const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-    console.log("Telegram initDataUnsafe:", initDataUnsafe);
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.ready();
 
-    if (initDataUnsafe && initDataUnsafe.user) {
-      setUser({
-        id: initDataUnsafe.user.id,
-        username: initDataUnsafe.user.username || ""
-      });
+      const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+      console.log("Telegram initDataUnsafe:", initDataUnsafe);
+
+      if (initDataUnsafe?.user) {
+        setUser({
+          id: initDataUnsafe.user.id.toString(),
+          username: initDataUnsafe.user.username || "(Анықталмаған)"
+        });
+      } else {
+        alert("❌ Telegram пайдаланушы мәліметтері жоқ");
+      }
     } else {
-      alert("❌ Telegram пайдаланушы мәліметтері қолжетімді емес");
+      alert("❌ Telegram WebApp арқылы ашу қажет!");
     }
-  } else {
-    alert("❌ Telegram WebApp арқылы ашыңыз!");
-  }
-}, []);
+  }, []);
 
   const addToCart = (product) => {
-    console.log("Adding to cart:", product);
     setCart((prev) => [...prev, product]);
     setAnimateAdd(product.id);
     setTimeout(() => setAnimateAdd(null), 500);
@@ -78,34 +80,32 @@ export default function WebAppShop() {
     setPage("confirm");
   };
 
+  // ✅ Telegram-ға тапсырыс жіберу
   const handlePayment = () => {
-  const order = {
-    user,
-    address,
-    products: cart,
-    total: cart.reduce((sum, p) => sum + p.price, 0),
+    const order = {
+      user,
+      address,
+      products: cart,
+      total: cart.reduce((sum, p) => sum + p.price, 0),
+    };
+
+    console.log("📤 Тапсырыс жіберілді:", order);
+
+    if (window.Telegram?.WebApp) {
+      try {
+        window.Telegram.WebApp.sendData(JSON.stringify(order));
+        console.log("✅ sendData шақырылды");
+      } catch (err) {
+        console.error("❌ sendData ERROR:", err);
+      }
+    } else {
+      alert("❌ Telegram WebApp арқылы ашылмады!");
+    }
   };
-
-  console.log("📤 Тапсырыс жіберілді:", order); // ✅ осы шығу керек
-
-  if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.sendData(JSON.stringify(order));
-  } else {
-    alert("❌ Telegram WebApp арқылы ашылмады!");
-  }
-};
-
-
-  useEffect(() => {
-    console.log("Current page:", page);
-  }, [page]);
-
-  useEffect(() => {
-    console.log("Cart updated:", cart);
-  }, [cart]);
 
   return (
     <div className="p-4 space-y-4 max-w-md mx-auto">
+      {/* Каталог беті */}
       {page === "catalog" && (
         <div className="grid gap-4">
           {loading && <Loading />}
@@ -124,7 +124,6 @@ export default function WebAppShop() {
                     src={product.imageURL}
                     alt={product.name}
                     className="w-full h-36 object-cover rounded-xl border"
-                    onError={() => console.log("❌ Сурет шықпады:", product.imageURL)}
                   />
                   <div className="text-xl font-bold text-gray-800">{product.name}</div>
                   <div className="text-gray-600 text-sm">{product.description}</div>
@@ -158,6 +157,7 @@ export default function WebAppShop() {
         </div>
       )}
 
+      {/* Себет беті */}
       {page === "cart" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <div className="text-xl font-semibold">Себет</div>
@@ -171,6 +171,7 @@ export default function WebAppShop() {
         </motion.div>
       )}
 
+      {/* Адрес беті */}
       {page === "address" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <div className="text-lg">Толық адрес мәліметтеріңізді енгізіңіз:</div>
@@ -183,6 +184,7 @@ export default function WebAppShop() {
         </motion.div>
       )}
 
+      {/* Тапсырыс растау беті */}
       {page === "confirm" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
           <div className="text-xl font-semibold">Тапсырыс мәліметтері</div>
