@@ -63,21 +63,26 @@ const ensureStringForRender = (value, fieldName = 'unknown field', defaultValue 
   }
 };
 
+// Placeholder QR Code URL - REPLACE THIS WITH YOUR ACTUAL QR CODE IMAGE URL
+const PAYMENT_QR_CODE_URL = "https://placehold.co/300x300/E2E8F0/94A3B8?text=QR+CODE+%C3%9CRNEGI%0A(Kaspi%2C+Halyk+etc)";
+
+
 export default function WebAppShop() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
-  const [page, setPage] = useState("catalog"); 
+  const [page, setPage] = useState("catalog");  // "catalog", "cart", "contactInfo", "address", "confirm", "qrPayment"
   const [contactDetails, setContactDetails] = useState({ fullName: "", phoneNumber: "", telegramUserID: "" });
   const [address, setAddress] = useState({ city: "", street: "", entrance: "", floor: "", flat: "" });
   const [animateAdd, setAnimateAdd] = useState(null);
-  const [appLoading, setAppLoading] = useState(true); // Combined initial loading state
+  const [appLoading, setAppLoading] = useState(true); 
   const [error, setError] = useState(null); 
   const [userWarning, setUserWarning] = useState(null); 
   const [user, setUser] = useState(null); 
   const [enhancingProductId, setEnhancingProductId] = useState(null);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false); // For payment submission loading state
+
 
   const fetchProducts = async () => {
-    // setError(null); // Error is for app-level, not just product loading
     try {
       const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
       if (!response.ok) {
@@ -122,11 +127,11 @@ export default function WebAppShop() {
         };
       });
       setProducts(formatted);
-      return true; // Indicate success
+      return true; 
     } catch (err) {
       console.error("Fetch products error:", err);
       setError("Өнімдерді жүктеу кезінде маңызды қате пайда болды. Интернет байланысыңызды тексеріп, бетті қайта жүктеп көріңіз.");
-      return false; // Indicate failure
+      return false; 
     }
   };
 
@@ -165,18 +170,16 @@ export default function WebAppShop() {
                 }
             } catch (e) {
                 console.error("Error during Telegram WebApp initialization:", e);
-                setUser(null); // Ensure user is null if TG init fails
-                // Don't set critical setError here if products loaded, allow app to run
+                setUser(null); 
                 setUserWarning("Telegram WebApp жүйесін инициализациялау кезінде қате. Қосымша Telegramсыз жұмыс істейді.");
             }
         } else {
             console.warn("Telegram WebApp context not found. The app will run without Telegram-specific features.");
             setUser(null);
-            // This is not a critical error that should block the app, just a warning.
             setUserWarning("Telegram WebApp контексті табылмады. Қосымша Telegramсыз жұмыс істейді, бірақ кейбір мүмкіндіктер шектеулі болуы мүмкін.");
         }
         
-        if (!productsFetched && !error) { // If products didn't fetch and no error was set by fetch, set a generic one
+        if (!productsFetched && !error) { 
             setError("Қосымшаны инициализациялау кезінде белгісіз қате.");
         }
         setAppLoading(false);
@@ -268,18 +271,24 @@ export default function WebAppShop() {
     setPage("confirm");
   };
 
-  const handlePayment = async () => {
+  const proceedToQrPayment = () => {
+    setPage("qrPayment");
+  };
+
+  const handleOrderSubmission = async () => {
+    setIsSubmittingOrder(true);
     const orderTotal = cart.reduce((sum, p) => sum + p.price, 0);
-    if (orderTotal <= 0 && cart.length > 0) {
-        alert("Тапсырыс сомасы жарамсыз. Өнім бағаларын тексеріңіз.");
-        return;
-    }
+    // Validation is already done before this point, but good to have a quick check
     if (cart.length === 0) {
-        alert("Себет бос. Тапсырыс беру үшін өнім қосыңыз.");
+        alert("Себет бос."); // Should not happen if flow is correct
+        setIsSubmittingOrder(false);
         return;
     }
 
+    const clientSideOrderId = `WEBAPP-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
     const order = {
+      clientOrderId: clientSideOrderId,
       userContext: { 
         id: user?.id || "Контексттен алынбады", 
         username: user?.username || "Контексттен алынбады"
@@ -301,30 +310,34 @@ export default function WebAppShop() {
       });
 
       if (res.ok) {
-        alert("✅ Тапсырыс жіберілді!");
+        alert(`✅ Тапсырыс №${clientSideOrderId} сәтті жіберілді! Тапсырыс статусы туралы Telegram ботынан хабарлама күтіңіз.`);
         setCart([]); 
+        setContactDetails({ fullName: "", phoneNumber: "", telegramUserID: "" }); 
+        setAddress({ city: "", street: "", entrance: "", floor: "", flat: "" }); 
         setPage("catalog"); 
       } else {
         const errorText = await res.text();
         alert(`❌ Сервер жауап қатпады. Статус: ${res.status}. Қате: ${errorText}`);
       }
     } catch (err) {
-      alert("⚠️ Қате: " + err.message);
+      alert("⚠️ Тапсырысты жіберу кезінде қате: " + err.message);
+    } finally {
+      setIsSubmittingOrder(false);
     }
   };
 
-  if (appLoading) { // Show full-screen loading while app initializes (fetches products AND checks TG)
+  if (appLoading) { 
       return <Loading />;
   }
 
-  if (error) { // Only show critical errors that prevent app from functioning (e.g., product fetch failed)
+  if (error) { 
       return <ErrorDisplay message={error} />;
   }
 
 
   return (
     <div className="p-4 space-y-4 max-w-md mx-auto pb-20">
-      {userWarning && page === "catalog" && ( // Display userWarning only on catalog if no critical error
+      {userWarning && page === "catalog" && ( 
          <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-md text-sm mb-4 shadow">
             <p><span className="font-bold">Ескерту:</span> {userWarning}</p>
          </div>
@@ -402,7 +415,7 @@ export default function WebAppShop() {
               </Button>
             </div>
           )}
-           {products.length === 0 && !appLoading && !error && ( // Show only if not loading and no error
+           {products.length === 0 && !appLoading && !error && ( 
              <div className="text-center text-gray-500 py-10">Өнімдер табылмады.</div>
            )}
         </div>
@@ -539,9 +552,40 @@ export default function WebAppShop() {
           ))}
           <hr className="my-2"/>
           <div className="font-bold text-right text-xl">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
-          <Button onClick={handlePayment} className="w-full bg-purple-700 hover:bg-purple-800 text-white rounded-xl py-3 text-lg mt-3">
+          
+          <Button onClick={proceedToQrPayment} className="w-full bg-purple-700 hover:bg-purple-800 text-white rounded-xl py-3 text-lg mt-3">
             Төлеу және тапсырыс беру
           </Button>
+        </motion.div>
+      )}
+
+      {page === "qrPayment" && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 bg-gray-50 p-6 rounded-xl shadow-lg text-center">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-semibold text-gray-800">Төлем</h2>
+                <Button variant="ghost" onClick={() => setPage("confirm")} className="text-blue-600 hover:bg-blue-50 text-sm">← Растауға оралу</Button>
+            </div>
+            <p className="text-gray-700">Төмендегі QR кодты Kaspi.kz немесе басқа банк қосымшасы арқылы сканерлеп, төлем жасаңыз.</p>
+            <div className="flex justify-center my-4">
+                <img 
+                    src={PAYMENT_QR_CODE_URL} 
+                    alt="Төлем QR коды" 
+                    className="w-64 h-64 md:w-72 md:h-72 border-4 border-gray-300 rounded-lg shadow-md"
+                    onError={(e) => {
+                        e.currentTarget.alt = 'QR кодты жүктеу мүмкін болмады';
+                        e.currentTarget.parentNode.innerHTML = '<p class="text-red-500">QR кодты жүктеу мүмкін болмады. Басқа төлем әдісін қолданыңыз немесе әкімшімен хабарласыңыз.</p>';
+                    }}
+                />
+            </div>
+            <p className="text-xl font-bold text-gray-800">Төлеуге: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</p>
+            <p className="text-xs text-gray-500 mt-2 mb-4">Төлем жасағаннан кейін, төмендегі батырманы басып, тапсырысыңызды растаңыз.</p>
+            <Button 
+                onClick={handleOrderSubmission} 
+                disabled={isSubmittingOrder}
+                className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 text-lg"
+            >
+              {isSubmittingOrder ? "Жіберілуде..." : "✅ Мен төледім, тапсырысты жіберу"}
+            </Button>
         </motion.div>
       )}
     </div>
