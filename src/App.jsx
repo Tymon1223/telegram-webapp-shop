@@ -93,7 +93,7 @@ export default function WebAppShop() {
   };
 
   try {
-    const res = await fetch("https://n8n.yourdomain.com/webhook/order", {
+    const res = await fetch("https://alphabotai.app.n8n.cloud/webhook-test/49eb5226-ed25-40e6-a3fc-272616c5a1a0", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(order),
@@ -101,14 +101,14 @@ export default function WebAppShop() {
 
     if (res.ok) {
       alert("✅ Тапсырыс жіберілді!");
-      setPage("catalog"); // немесе басқа бетке өт
     } else {
-      alert("❌ Сервер қате қайтарды.");
+      alert("❌ Сервер жауап қатпады.");
     }
   } catch (err) {
-    alert("⚠️ Байланыс қатесі: " + err.message);
+    alert("⚠️ Қате: " + err.message);
   }
 };
+
 
 
   return (
