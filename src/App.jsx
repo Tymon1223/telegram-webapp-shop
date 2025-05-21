@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
 // Assuming Card, CardContent, Button, Loading are correctly imported or defined elsewhere
-// For this example, I'll use the placeholder definitions you provided if they were in the prompt.
-// If they are from "@/components/ui/...", ensure that path is correct and components are exported.
 
 // Placeholder UI components (if not imported from a UI library)
 const Card = ({ className, children }) => <div className={`border rounded-lg shadow ${className}`}>{children}</div>;
@@ -20,19 +18,19 @@ const Button = ({ className, children, onClick, as, href, variant, disabled }) =
   );
 };
 const Loading = () => (
-  <div className="flex justify-center items-center h-32"> {/* Adjusted height for inline loading */}
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-    <p className="ml-3 text-gray-700">Жүктелуде...</p>
+  <div className="flex justify-center items-center h-screen"> {/* Full screen loading initially */}
+    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
+    <p className="ml-4 text-lg text-gray-700">Жүктелуде...</p>
   </div>
 );
 
-const ErrorDisplay = ({ message }) => (
-    <div className="p-4 max-w-md mx-auto text-center">
-      <div className="text-red-700 text-lg p-4 border border-red-500 rounded-md bg-red-100">
-          <p className="font-semibold">Қате:</p>
+const ErrorDisplay = ({ message }) => ( // This is for critical errors like product fetch failure
+    <div className="p-4 max-w-md mx-auto text-center mt-10">
+      <div className="text-red-700 text-lg p-6 border-2 border-red-500 rounded-xl bg-red-50 shadow-lg">
+          <p className="font-bold text-xl mb-2">🚨 Қате!</p>
           <p>{message}</p>
-          <Button onClick={() => window.location.reload()} className="mt-4 bg-red-600 hover:bg-red-700 text-white">
-              Қайта жүктеу
+          <Button onClick={() => window.location.reload()} className="mt-6 bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 text-base">
+              Бетті қайта жүктеу
           </Button>
       </div>
     </div>
@@ -68,23 +66,22 @@ const ensureStringForRender = (value, fieldName = 'unknown field', defaultValue 
 export default function WebAppShop() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
-  const [page, setPage] = useState("catalog");
+  const [page, setPage] = useState("catalog"); 
+  const [contactDetails, setContactDetails] = useState({ fullName: "", phoneNumber: "", telegramUserID: "" });
   const [address, setAddress] = useState({ city: "", street: "", entrance: "", floor: "", flat: "" });
   const [animateAdd, setAnimateAdd] = useState(null);
-  const [loading, setLoading] = useState(true); // For product loading
-  const [error, setError] = useState(null); // For critical errors (no products, not in Telegram)
-  const [userWarning, setUserWarning] = useState(null); // For non-critical warnings (no user details)
-  const [user, setUser] = useState(null); // Initialize user as null
+  const [appLoading, setAppLoading] = useState(true); // Combined initial loading state
+  const [error, setError] = useState(null); 
+  const [userWarning, setUserWarning] = useState(null); 
+  const [user, setUser] = useState(null); 
   const [enhancingProductId, setEnhancingProductId] = useState(null);
 
-  // ✅ Өнімдерді жүктеу
   const fetchProducts = async () => {
-    setLoading(true); 
-    setError(null); 
+    // setError(null); // Error is for app-level, not just product loading
     try {
       const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
       if (!response.ok) {
-          throw new Error(`HTTP error ${response.status}`);
+          throw new Error(`HTTP error ${response.status} while fetching products`);
       }
       const data = await response.json();
       if (!Array.isArray(data)) {
@@ -124,53 +121,71 @@ export default function WebAppShop() {
           enhancedDescription: null, 
         };
       });
-
       setProducts(formatted);
+      return true; // Indicate success
     } catch (err) {
-      console.error("Fetch error:", err);
-      setError("Өнімдерді жүктеу кезінде қате пайда болды. Бетті қайта жүктеп көріңіз."); // More specific error
-    } finally {
-      setLoading(false);
+      console.error("Fetch products error:", err);
+      setError("Өнімдерді жүктеу кезінде маңызды қате пайда болды. Интернет байланысыңызды тексеріп, бетті қайта жүктеп көріңіз.");
+      return false; // Indicate failure
     }
   };
 
   useEffect(() => {
-    fetchProducts();
+    const initializeApp = async () => {
+        setAppLoading(true);
+        setError(null);
+        setUserWarning(null);
 
-    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-      try {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand(); 
+        const productsFetched = await fetchProducts();
 
-        const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-        console.log("Telegram initDataUnsafe:", initDataUnsafe);
+        if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+            try {
+                console.log("Attempting to initialize Telegram WebApp...");
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand(); 
 
-        if (initDataUnsafe?.user?.id) { // Check for user.id specifically
-          setUser({
-            id: ensureStringForRender(initDataUnsafe.user.id, 'user.id_telegram'),
-            username: ensureStringForRender(initDataUnsafe.user.username, 'user.username_telegram', "(Анықталмаған)")
-          });
-          setUserWarning(null); // Clear warning if user data is found
-          console.log("User data successfully retrieved:", initDataUnsafe.user);
+                const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+                console.log("Telegram.WebApp.initDataUnsafe:", initDataUnsafe);
+
+                if (initDataUnsafe?.user?.id) { 
+                    const tgUser = {
+                        id: ensureStringForRender(initDataUnsafe.user.id, 'user.id_telegram'),
+                        username: ensureStringForRender(initDataUnsafe.user.username, 'user.username_telegram', "(Анықталмаған)")
+                    };
+                    setUser(tgUser);
+                    setContactDetails(prevDetails => ({
+                        ...prevDetails,
+                        telegramUserID: prevDetails.telegramUserID || tgUser.id 
+                    }));
+                    console.log("User data successfully retrieved from Telegram:", tgUser);
+                } else {
+                    setUser(null); 
+                    console.warn("Telegram user data (ID) not found in initDataUnsafe. Proceeding as anonymous within Telegram context.");
+                    setUserWarning("Telegram пайдаланушы ID-і табылмады. Тапсырыстар \"аноним\" ретінде жіберілуі мүмкін.");
+                }
+            } catch (e) {
+                console.error("Error during Telegram WebApp initialization:", e);
+                setUser(null); // Ensure user is null if TG init fails
+                // Don't set critical setError here if products loaded, allow app to run
+                setUserWarning("Telegram WebApp жүйесін инициализациялау кезінде қате. Қосымша Telegramсыз жұмыс істейді.");
+            }
         } else {
-          setUser(null); // Explicitly set user to null
-          console.warn("❌ Telegram user data not found or incomplete in initDataUnsafe.");
-          setUserWarning("Telegram пайдаланушы ақпараты табылмады. Тапсырыстар \"аноним\" ретінде жіберіледі. Толыққанды жұмыс үшін бот арқылы дұрыс кіргеніңізді тексеріңіз.");
+            console.warn("Telegram WebApp context not found. The app will run without Telegram-specific features.");
+            setUser(null);
+            // This is not a critical error that should block the app, just a warning.
+            setUserWarning("Telegram WebApp контексті табылмады. Қосымша Telegramсыз жұмыс істейді, бірақ кейбір мүмкіндіктер шектеулі болуы мүмкін.");
         }
-      } catch (e) {
-          console.error("Error during Telegram WebApp initialization:", e);
-          setUser(null);
-          setError("Telegram WebApp жүйесін инициализациялау кезінде қате пайда болды. Telegram ішінде ашқаныңызға көз жеткізіңіз.");
-      }
-    } else {
-      console.warn("❌ Telegram WebApp context not found. App may not function correctly outside Telegram.");
-      setUser(null);
-      setError("Бұл дүкенді Telegram боты арқылы ашыңыз. Қазіргі ортада Telegram WebApp мүмкіндіктері қолжетімсіз.");
-    }
+        
+        if (!productsFetched && !error) { // If products didn't fetch and no error was set by fetch, set a generic one
+            setError("Қосымшаны инициализациялау кезінде белгісіз қате.");
+        }
+        setAppLoading(false);
+    };
+
+    initializeApp();
   }, []);
 
 
-  // Gemini API Function
   const handleEnhanceDescription = async (productId) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
@@ -226,12 +241,30 @@ export default function WebAppShop() {
     setTimeout(() => setAnimateAdd(null), 500);
   };
 
+  const handleContactDetailsChange = (e) => {
+    const { name, value } = e.target;
+    setContactDetails(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleProceedToAddress = () => {
+    if (!contactDetails.fullName.trim()) {
+        alert("Аты-жөніңізді енгізіңіз.");
+        return;
+    }
+    if (!contactDetails.phoneNumber.trim()) {
+        alert("Телефон нөміріңізді енгізіңіз.");
+        return;
+    }
+    console.log("Contact details confirmed:", contactDetails);
+    setPage("address");
+  };
+  
   const handleConfirmAddress = () => {
-    console.log("Confirmed address:", address);
     if (!address.city.trim() || !address.street.trim()) {
         alert("Қала және Көше, үй нөмірі өрістері міндетті.");
         return;
     }
+    console.log("Address confirmed:", address);
     setPage("confirm");
   };
 
@@ -247,14 +280,18 @@ export default function WebAppShop() {
     }
 
     const order = {
-      user: {
-        id: user?.id || "аноним", // Fallback to "аноним" if user or user.id is null/undefined
-        username: user?.username || "аноним" // Fallback for username
+      userContext: { 
+        id: user?.id || "Контексттен алынбады", 
+        username: user?.username || "Контексттен алынбады"
       },
-      address,
+      contactInfo: contactDetails, 
+      deliveryAddress: address, 
       products: cart,
       total: orderTotal,
+      orderTimestamp: new Date().toISOString()
     };
+
+    console.log("Sending order to webhook:", order);
 
     try {
       const res = await fetch("https://alphabotai.app.n8n.cloud/webhook-test/49eb5226-ed25-40e6-a3fc-272616c5a1a0", {
@@ -276,26 +313,25 @@ export default function WebAppShop() {
     }
   };
 
-  if (loading) {
+  if (appLoading) { // Show full-screen loading while app initializes (fetches products AND checks TG)
       return <Loading />;
   }
 
-  if (error) { // Critical error (e.g., not in Telegram, products failed to load)
+  if (error) { // Only show critical errors that prevent app from functioning (e.g., product fetch failed)
       return <ErrorDisplay message={error} />;
   }
 
 
   return (
     <div className="p-4 space-y-4 max-w-md mx-auto pb-20">
-      {userWarning && !error && page === "catalog" && (
+      {userWarning && page === "catalog" && ( // Display userWarning only on catalog if no critical error
          <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-md text-sm mb-4 shadow">
-            <p><span className="font-bold">Назар аударыңыз:</span> {userWarning}</p>
+            <p><span className="font-bold">Ескерту:</span> {userWarning}</p>
          </div>
       )}
 
       {page === "catalog" && (
         <div className="space-y-4"> 
-          {/* Loading and error for products are handled above the main return now */}
           {products.map((product) => (
             <motion.div
               key={product.id}
@@ -354,17 +390,19 @@ export default function WebAppShop() {
 
           {products.length > 0 && ( 
             <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-50"> 
-              <Button onClick={() => setPage("cart")} className="w-full bg-black text-white rounded-xl py-3 text-lg relative shadow-lg">
-                Себетке өту
-                {cart.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {cart.length}
-                  </span>
-                )}
+              <Button onClick={() => {
+                  if (cart.length === 0) {
+                      alert("Себет бос. Алдымен өнім қосыңыз.");
+                      return;
+                  }
+                  setPage("contactInfo");
+              }} 
+              className="w-full bg-black text-white rounded-xl py-3 text-lg relative shadow-lg">
+                Себетке өту ({cart.length})
               </Button>
             </div>
           )}
-           {products.length === 0 && ( // Show this if no products and no error/loading
+           {products.length === 0 && !appLoading && !error && ( // Show only if not loading and no error
              <div className="text-center text-gray-500 py-10">Өнімдер табылмады.</div>
            )}
         </div>
@@ -390,19 +428,53 @@ export default function WebAppShop() {
           {cart.length > 0 && (
             <>
               <div className="font-bold text-right text-xl mt-4">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
-              <Button onClick={() => setPage("address")} className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 text-lg">📍 Адрес енгізу</Button>
+              <Button onClick={() => setPage("contactInfo")} className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 text-lg">📝 Байланыс ақпараты</Button>
             </>
           )}
+        </motion.div>
+      )}
+
+      {page === "contactInfo" && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold">Байланыс ақпараты</h2>
+            <Button variant="ghost" onClick={() => setPage("cart")} className="text-blue-600 hover:bg-blue-50">← Себет</Button>
+          </div>
+          <p className="text-sm text-gray-600">Тапсырысты растау және жеткізу үшін қажетті ақпаратты енгізіңіз.</p>
+          <input
+            type="text" name="fullName" placeholder="Аты-жөніңіз *"
+            className="w-full p-3 rounded-xl border bg-white text-black focus:ring-2 focus:ring-blue-500 outline-none"
+            value={contactDetails.fullName} onChange={handleContactDetailsChange}
+          />
+          <input
+            type="tel" name="phoneNumber" placeholder="Телефон нөміріңіз *"
+            className="w-full p-3 rounded-xl border bg-white text-black focus:ring-2 focus:ring-blue-500 outline-none"
+            value={contactDetails.phoneNumber} onChange={handleContactDetailsChange}
+          />
+          <div>
+            <label htmlFor="telegramUserID" className="block text-sm font-medium text-gray-700 mb-1">Telegram UserID (міндетті емес)</label>
+            <input
+              type="text" name="telegramUserID" id="telegramUserID" placeholder="Сіздің Telegram UserID"
+              className="w-full p-3 rounded-xl border bg-white text-black focus:ring-2 focus:ring-blue-500 outline-none"
+              value={contactDetails.telegramUserID} onChange={handleContactDetailsChange}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              UserID-іңізді білмесеңіз, Telegram-да <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">@userinfobot</a>-қа `/start` деп жазып біле аласыз. Бұл бізге сізбен байланысуға көмектеседі.
+            </p>
+          </div>
+          <Button onClick={handleProceedToAddress} className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3 text-lg mt-2">
+            Келесі: Адрес енгізу
+          </Button>
         </motion.div>
       )}
 
       {page === "address" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-semibold">Адрес енгізу</h2>
-            <Button variant="ghost" onClick={() => setPage("cart")} className="text-blue-600 hover:bg-blue-50">← Себет</Button>
+            <h2 className="text-2xl font-semibold">Жеткізу адресі</h2>
+            <Button variant="ghost" onClick={() => setPage("contactInfo")} className="text-blue-600 hover:bg-blue-50">← Байланыс</Button>
           </div>
-          <p className="text-sm text-gray-600">Толық адрес мәліметтеріңізді енгізіңіз:</p>
+          <p className="text-sm text-gray-600">Толық жеткізу адресін енгізіңіз:</p>
           <input
             type="text" placeholder="Қала *"
             className="w-full p-3 rounded-xl border bg-white text-black focus:ring-2 focus:ring-blue-500 outline-none"
@@ -429,7 +501,7 @@ export default function WebAppShop() {
             value={address.flat} onChange={(e) => setAddress({ ...address, flat: e.target.value })}
           />
           <Button onClick={handleConfirmAddress} className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3 text-lg mt-2">
-            Растау
+            Тапсырысты растауға өту
           </Button>
         </motion.div>
       )}
@@ -440,15 +512,23 @@ export default function WebAppShop() {
             <h2 className="text-2xl font-semibold">Тапсырысты растау</h2>
             <Button variant="ghost" onClick={() => setPage("address")} className="text-blue-600 hover:bg-blue-50">← Адрес</Button>
           </div>
+          
           <div className="space-y-1 text-sm">
+            <p className="font-semibold text-md">Байланыс ақпараты:</p>
+            <p><span className="font-medium">Аты-жөні:</span> {contactDetails.fullName}</p>
+            <p><span className="font-medium">Телефон:</span> {contactDetails.phoneNumber}</p>
+            {contactDetails.telegramUserID && <p><span className="font-medium">Telegram UserID (енгізілген):</span> {contactDetails.telegramUserID}</p>}
+            <p className="text-xs text-gray-500 mt-0.5">Telegram контекстінен: @{user?.username || "анықталмаған"} (ID: {user?.id || "анықталмаған"})</p>
+          </div>
+          <hr className="my-2"/>
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold text-md">Жеткізу адресі:</p>
             <p><span className="font-medium">Қала:</span> {address.city}</p>
             <p><span className="font-medium">Көше, үй:</span> {address.street}</p>
             {address.entrance && <p><span className="font-medium">Кіреберіс:</span> {address.entrance}</p>}
             {address.floor && <p><span className="font-medium">Қабат:</span> {address.floor}</p>}
             {address.flat && <p><span className="font-medium">Пәтер:</span> {address.flat}</p>}
           </div>
-          <hr className="my-2"/>
-          <div className="text-sm text-gray-600">Пайдаланушы: @{user?.username || "аноним"} (ID: {user?.id || "аноним"})</div>
           <hr className="my-2"/>
           <p className="font-semibold text-md">Тауарлар:</p>
           {cart.map((item, idx) => (
@@ -460,7 +540,7 @@ export default function WebAppShop() {
           <hr className="my-2"/>
           <div className="font-bold text-right text-xl">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
           <Button onClick={handlePayment} className="w-full bg-purple-700 hover:bg-purple-800 text-white rounded-xl py-3 text-lg mt-3">
-            Төлемге өту
+            Төлеу және тапсырыс беру
           </Button>
         </motion.div>
       )}
