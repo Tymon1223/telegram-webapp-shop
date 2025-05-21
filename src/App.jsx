@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import Loading from "./components/Loading";
+
 
 export default function WebAppShop() {
   const [products, setProducts] = useState([]);
@@ -74,7 +76,7 @@ export default function WebAppShop() {
     <div className="p-4 space-y-4 max-w-md mx-auto">
       {page === "catalog" && (
         <div className="grid gap-4">
-          {loading && <div>Жүктелуде...</div>}
+          {loading && <Loading />}
           {error && <div className="text-red-600">{error}</div>}
 
           {!loading && !error && products.map((product) => (
