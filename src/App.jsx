@@ -47,19 +47,24 @@ export default function WebAppShop() {
   };
 
   useEffect(() => {
-    fetchProducts();
+  if (window.Telegram?.WebApp) {
+    window.Telegram.WebApp.ready();
 
-    if (window.Telegram && window.Telegram.WebApp) {
-      const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-      console.log("Telegram user:", initDataUnsafe?.user);
-      if (initDataUnsafe?.user) {
-        setUser({
-          id: initDataUnsafe.user.id,
-          username: initDataUnsafe.user.username || ""
-        });
-      }
+    const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+    console.log("Telegram initDataUnsafe:", initDataUnsafe);
+
+    if (initDataUnsafe && initDataUnsafe.user) {
+      setUser({
+        id: initDataUnsafe.user.id,
+        username: initDataUnsafe.user.username || ""
+      });
+    } else {
+      alert("❌ Telegram пайдаланушы мәліметтері қолжетімді емес");
     }
-  }, []);
+  } else {
+    alert("❌ Telegram WebApp арқылы ашыңыз!");
+  }
+}, []);
 
   const addToCart = (product) => {
     console.log("Adding to cart:", product);
