@@ -21,6 +21,7 @@ const fetchProducts = async () => {
     const data = await response.json();
 
     const formatted = data.map(item => {
+      console.log("imageURL:", item.imageURL);
       // Сурет сілтемесін Google Drive direct link форматына айналдыру
       const isDriveLink = item.imageURL.includes("drive.google.com");
       const imageURL = isDriveLink
