@@ -193,6 +193,22 @@ const fetchProducts = async () => {
           <Button onClick={handleConfirmAddress} className="w-full bg-blue-700 text-white rounded-xl py-3">Растау</Button>
         </motion.div>
       )}
+      const handlePayment = () => {
+  const order = {
+    user,
+    address,
+    products: cart,
+    total: cart.reduce((sum, p) => sum + p.price, 0),
+  };
+
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.sendData(JSON.stringify(order));
+    console.log("📤 Тапсырыс жіберілді:", order);
+  } else {
+    console.log("❌ Telegram WebApp жоқ.");
+  }
+};
+
 
       {page === "confirm" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
@@ -205,7 +221,13 @@ const fetchProducts = async () => {
           </div>
           <div className="text-sm text-gray-500">Пайдаланушы: @{user.username} (ID: {user.id})</div>
           <div className="font-bold text-right">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
-          <Button className="w-full bg-purple-700 text-white rounded-xl py-3">Төлемге өту</Button>
+          <Button
+  onClick={handlePayment}
+  className="w-full bg-purple-700 text-white rounded-xl py-3"
+>
+  Төлемге өту
+</Button>
+
         </motion.div>
       )}
     </div>
