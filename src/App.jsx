@@ -5,239 +5,301 @@ import { motion } from "framer-motion";
 import Loading from "./components/Loading";
 
 export default function WebAppShop() {
-  const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState([]);
-  const [page, setPage] = useState("catalog");
+  const [products, setProducts] = useState<any[]>([]); // Өнімдердің типін нақтылау жақсы (мысалы, interface Product {...})
+  const [cart, setCart] = useState<any[]>([]); // Сол сияқты, cart элементтерінің типі
+  const [page, setPage] = useState<"catalog" | "cart" | "address" | "confirm">("catalog");
   const [address, setAddress] = useState({ city: "", street: "", entrance: "", floor: "", flat: "" });
-  const [animateAdd, setAnimateAdd] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [user, setUser] = useState({ id: "", username: "" });
+  const [user, setUser] = useState<{ id: string, username: string } | null>(null);
 
-  // ✅ Өнімдерді жүктеу
-  const fetchProducts = async () => {
-    try {
-      const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
-      const data = await response.json();
+  const [productsLoading, setProductsLoading] = useState(true); // Өнімдер үшін бөлек loading
+  const [telegramReady, setTelegramReady] = useState(false); // Telegram контекстінің дайындығы үшін
+  const [initialLoading, setInitialLoading] = useState(true); // Жалпы бастапқы жүктеу
 
-      const formatted = data.map(item => {
-        const isDriveLink = item.imageURL.includes("drive.google.com");
-        const imageURL = isDriveLink
-          ? `https://drive.google.com/uc?export=view&id=${item.imageURL.split("/d/")[1].split("/")[0]}`
-          : item.imageURL;
+  const [error, setError] = useState<string | null>(null);
 
-        return {
-          id: item.id,
-          name: item.name,
-          imageURL,
-          price: parseInt(item.price),
-          description: item.description,
-          stock: item.stock,
-          size: item.size
-        };
-      });
-
-      setProducts(formatted);
-    } catch (err) {
-      setError("Өнімдер жүктелмеді");
-      console.error("Fetch error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅ Telegram WebApp арқылы келген user дерегін алу
+  // 1️⃣ Өнімдерді Google Sheet-тен жүктейміз
   useEffect(() => {
-  if (window.Telegram?.WebApp) {
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand(); 
-
-    const { user } = window.Telegram.WebApp.initDataUnsafe;
-    console.log("TG user:", user);
-    if (user) {
-      setUser({
-        id: user.id.toString(),
-        username: user.username
-      });
+    async function fetchProducts() {
+      setProductsLoading(true); // Жүктеуді бастау
+      setError(null); // Алдыңғы қатені тазалау
+      try {
+        const res = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
+        if (!res.ok) { // HTTP қатесін тексеру
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        const data = await res.json();
+        setProducts(data.map((item: any) => {
+          const isDrive = item.imageURL && item.imageURL.includes("drive.google.com");
+          return {
+            ...item,
+            id: item.id || crypto.randomUUID(), // Егер id болмаса, генерациялау
+            price: +item.price || 0, // Егер бағасы жарамсыз болса, 0
+            imageURL: isDrive
+              ? `https://drive.google.com/uc?export=view&id=${item.imageURL.split("/d/")[1].split("/")[0]}`
+              : item.imageURL
+          };
+        }));
+      } catch (e: any) {
+        console.error("Failed to fetch products:", e);
+        setError(`Өнімдер жүктелмеді: ${e.message}`);
+      } finally {
+        setProductsLoading(false);
+      }
     }
-  }
-}, []);
+    fetchProducts();
+  }, []);
 
-
-  const addToCart = (product) => {
-    setCart((prev) => [...prev, product]);
-    setAnimateAdd(product.id);
-    setTimeout(() => setAnimateAdd(null), 500);
-  };
-
-  const handleConfirmAddress = () => {
-    console.log("Confirmed address:", address);
-    setPage("confirm");
-  };
-
-  // ✅ Telegram-ға тапсырыс жіберу
-  const handlePayment = async () => {
-  const order = {
-    user: {
-      id: user?.id || "аноним",
-      username: user?.username || "аноним"
-    },
-    address,
-    products: cart,
-    total: cart.reduce((sum, p) => sum + p.price, 0),
-  };
-
-  try {
-    const res = await fetch("https://alphabotai.app.n8n.cloud/webhook-test/49eb5226-ed25-40e6-a3fc-272616c5a1a0", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(order),
-    });
-
-    if (res.ok) {
-      alert("✅ Тапсырыс жіберілді!");
+  // 2️⃣ Telegram WebApp контекстін тексереміз
+  useEffect(() => {
+    if (window.Telegram?.WebApp) {
+      try {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+        const init = window.Telegram.WebApp.initDataUnsafe;
+        if (init?.user) {
+          setUser({
+            id: init.user.id.toString(),
+            username: init.user.username || "(unknown)"
+          });
+          setTelegramReady(true); // Telegram дайын
+        } else {
+          // Пайдаланушы дерегі жоқ, бірақ WebApp контексі бар.
+          // Бұл жағдайды қалай өңдеу керектігін шешу керек.
+          // Мүмкін бұл да қате немесе WebApp сыртында ашылғанға ұқсас.
+          console.warn("Telegram WebApp context is present, but no user data.");
+          setTelegramReady(false); // Немесе true, бірақ user жоқ екенін ескеру
+        }
+      } catch (e) {
+        console.error("Error initializing Telegram WebApp:", e);
+        // Бұл жерде қате туындаса, isTelegram === false сценарийіне өтуі мүмкін.
+        setTelegramReady(false);
+      }
     } else {
-      alert("❌ Сервер жауап қатпады.");
+      setTelegramReady(false); // Telegram контексті жоқ
     }
-  } catch (err) {
-    alert("⚠️ Қате: " + err.message);
+  }, []);
+
+  // Жалпы бастапқы жүктеу күйін анықтау
+  useEffect(() => {
+    // `telegramReady` күйінің бастапқы мәні `false` болғандықтан,
+    // `window.Telegram?.WebApp` тексеруінен кейін ол не `true`, не `false` болады.
+    // `productsLoading` аяқталғанша және `telegramReady` мәні орнатылғанша күтеміз.
+    // `telegramReady` бірден орнатылуы мүмкін, өйткені `window.Telegram.WebApp.ready()` синхронды емес.
+    // Алайда, біздің мақсатымыз - `productsLoading` аяқталғанша және `telegramReady` анықталғанша күту.
+    // `telegramReady` әрқашан бір мәнге (`true` немесе `false`) ие болады, сондықтан оны тікелей қолданамыз.
+    if (!productsLoading) { // Өнімдер жүктеліп біткенде
+         setInitialLoading(false);
+    }
+  }, [productsLoading]);
+
+
+  // 3️⃣ Жүктеу немесе Telegram контексті жоқ болса көрсетілетін экрандар
+  if (initialLoading) {
+    return <Loading />;
   }
-};
+
+  if (!user && window.Telegram?.WebApp && telegramReady) {
+    // Telegram WebApp ішінде, бірақ user дерегі жоқ (жоғарыдағы console.warn жағдайы)
+    // Мұны қалай өңдеу керектігін шешіңіз. Мүмкін, бұл да "контекст жоқ" жағдайы.
+     return (
+       <div className="p-4 max-w-md mx-auto text-center">
+         <h2 className="text-xl font-semibold mb-4">❗️ Пайдаланушы дерегі табылмады</h2>
+         <p className="mb-6">
+           Telegram Web App ішіндесіз, бірақ пайдаланушы ақпараты алынбады.
+           Ботты қайта іске қосып көріңіз.
+         </p>
+         <Button
+           as="a"
+            // Боттың нақты username-ін көрсетіңіз
+           href={`https://t.me/${process.env.REACT_APP_BOT_USERNAME || "YourBotUsername"}?start=shop`}
+           className="bg-blue-600 text-white"
+         >
+           Ботты ашу
+         </Button>
+       </div>
+     );
+  }
 
 
+  if (!user && !window.Telegram?.WebApp) { // Немесе !telegramReady && !user
+    return (
+      <div className="p-4 max-w-md mx-auto text-center">
+        <h2 className="text-xl font-semibold mb-4">❗️ Web App контексті жоқ</h2>
+        <p className="mb-6">
+          Өтінеміз, **Telegram** ішіндегі боттан
+          «🛍️ Онлайн дүкен» батырмасын басып ашыңыз.
+        </p>
+        <Button
+          as="a"
+           // Боттың нақты username-ін көрсетіңіз
+          href={`https://t.me/${process.env.REACT_APP_BOT_USERNAME || "YourBotUsername"}?start=shop`}
+          className="bg-blue-600 text-white"
+        >
+          Ботты ашу
+        </Button>
+      </div>
+    );
+  }
+
+  // Қате болса (жүктеу аяқталғаннан кейін)
+  if (error && page === "catalog") { // Немесе error-ды глобалды түрде жоғарыда көрсету
+    return (
+      <div className="p-4 max-w-md mx-auto text-center">
+        <div className="text-red-600 text-xl p-4 border border-red-600 rounded-md">
+            <p className="font-semibold">Қате пайда болды:</p>
+            {error}
+            <Button onClick={() => window.location.reload()} className="mt-4">
+                Қайта жүктеу
+            </Button>
+        </div>
+      </div>
+    );
+  }
+
+
+  // 4️⃣ Қалған логика — каталог, себет, адрес, растау
+  const addToCart = (p: any) => setCart(prev => [...prev, p]);
+  const total = cart.reduce((s, p) => s + (p.price || 0), 0); // p.price болуын тексеру
+
+  const handlePayment = async () => {
+    if (!user) {
+        alert("Пайдаланушы анықталмады!");
+        return;
+    }
+    if (cart.length === 0) {
+        alert("Себет бос!");
+        return;
+    }
+    const order = { user, address, products: cart, total };
+    // Төлем алдында loading күйін орнатуға болады
+    try {
+      const res = await fetch("https://alphabotai.app.n8n.cloud/webhook-test/49eb5226-ed25-40e6-a3fc-272616c5a1a0", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order)
+      });
+      alert(res.ok ? "✅ Тапсырыс жіберілді!" : `❌ Қате серверде: ${res.statusText}`);
+      if (res.ok) {
+        setCart([]); // Себетті тазалау
+        setPage("catalog");
+      }
+    } catch (e: any) {
+      alert("⚠️ Байланыс қатесі: " + e.message);
+    }
+  };
 
   return (
-    <div className="p-4 space-y-4 max-w-md mx-auto">
-      {/* Каталог беті */}
+    <div className="p-4 max-w-md mx-auto space-y-4 pb-20"> {/* Төменгі жағында орын қалдыру */}
       {page === "catalog" && (
-        <div className="grid gap-4">
-          {loading && <Loading />}
-          {error && <div className="text-red-600">{error}</div>}
-
-          {!loading && !error && products.map((product) => (
-            <motion.div
-              key={product.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Card className="shadow-xl rounded-2xl overflow-hidden">
-                <CardContent className="p-4 space-y-2">
-                  <img
-                    src={product.imageURL}
-                    alt={product.name}
-                    className="w-full h-36 object-cover rounded-xl border"
-                  />
-                  <div className="text-xl font-bold text-gray-800">{product.name}</div>
-                  <div className="text-gray-600 text-sm">{product.description}</div>
-                  <div className="text-lg font-semibold text-green-600">{product.price} ₸</div>
-                  <motion.div
-                    whileTap={{ scale: 0.95 }}
-                    animate={animateAdd === product.id ? { scale: [1, 1.1, 1] } : {}}
-                    transition={{ duration: 0.4 }}
-                  >
-                    <Button onClick={() => addToCart(product)} className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white">
-                      Себетке қосу
-                    </Button>
-                  </motion.div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-
-          {!loading && !error && (
-            <div className="relative w-full">
-              <Button onClick={() => setPage("cart")} className="w-full bg-black text-white rounded-xl py-3 text-lg relative">
-                Себетке өту
-                {cart.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5">
-                    {cart.length}
-                  </span>
-                )}
-              </Button>
-            </div>
+        <>
+          {products.length === 0 && !productsLoading && !error && (
+            <div className="text-center text-gray-500 py-8">Өнімдер табылмады.</div>
           )}
-        </div>
-      )}
-
-      {/* Себет беті */}
-      {page === "cart" && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          <div className="text-xl font-semibold">Себет</div>
-          {cart.map((item, idx) => (
-            <div key={idx} className="border p-2 rounded-xl bg-white shadow">
-              {item.name} — {item.price} ₸
-            </div>
-          ))}
-          <div className="font-bold text-right">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
-          <Button onClick={() => setPage("address")} className="w-full bg-green-600 text-white rounded-xl py-3">📍 Адрес енгізу</Button>
-        </motion.div>
-      )}
-
-      {/* Адрес беті */}
-      {page === "address" && (
-  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-    <div className="text-lg">Толық адрес мәліметтеріңізді енгізіңіз:</div>
-
-    <input
-      type="text"
-      placeholder="Қала"
-      className="w-full p-3 rounded-xl border bg-white text-black z-10"
-      value={address.city}
-      onChange={(e) => setAddress({ ...address, city: e.target.value })}
-    />
-    <input
-      type="text"
-      placeholder="Көше, үй нөмірі"
-      className="w-full p-3 rounded-xl border bg-white text-black z-10"
-      value={address.street}
-      onChange={(e) => setAddress({ ...address, street: e.target.value })}
-    />
-    <input
-      type="text"
-      placeholder="Кіреберіс"
-      className="w-full p-3 rounded-xl border bg-white text-black z-10"
-      value={address.entrance}
-      onChange={(e) => setAddress({ ...address, entrance: e.target.value })}
-    />
-    <input
-      type="text"
-      placeholder="Қабат"
-      className="w-full p-3 rounded-xl border bg-white text-black z-10"
-      value={address.floor}
-      onChange={(e) => setAddress({ ...address, floor: e.target.value })}
-    />
-    <input
-      type="text"
-      placeholder="Пәтер"
-      className="w-full p-3 rounded-xl border bg-white text-black z-10"
-      value={address.flat}
-      onChange={(e) => setAddress({ ...address, flat: e.target.value })}
-    />
-
-    <Button onClick={handleConfirmAddress} className="w-full bg-blue-700 text-white rounded-xl py-3">
-      Растау
-    </Button>
-  </motion.div>
-)}
-
-
-      {/* Тапсырыс растау беті */}
-      {page === "confirm" && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-          <div className="text-xl font-semibold">Тапсырыс мәліметтері</div>
-          {cart.map((item, idx) => (
-            <div key={idx}>{item.name} — {item.price} ₸</div>
-          ))}
-          <div>
-            Қала: {address.city}, Адрес: {address.street}, Кіреберіс: {address.entrance}, Қабат: {address.floor}, Пәтер: {address.flat}
+          <div className="grid gap-4">
+            {products.map((p: any) => (
+              <motion.div key={p.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                <Card className="rounded-2xl overflow-hidden shadow">
+                  <CardContent className="space-y-2 p-4">
+                    {p.imageURL ? (
+                        <img src={p.imageURL} alt={p.name} className="w-full h-40 object-cover rounded" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                    ) : (
+                        <div className="w-full h-40 bg-gray-200 rounded flex items-center justify-center text-gray-400">Сурет жоқ</div>
+                    )}
+                    <h3 className="font-bold text-lg">{p.name || "Атауы жоқ"}</h3>
+                    <p className="text-gray-600 text-sm min-h-[40px]">{p.description || "Сипаттамасы жоқ"}</p>
+                    <p className="text-green-600 font-semibold text-lg">{p.price} ₸</p>
+                    <Button onClick={() => { addToCart(p) }} className="w-full">Себетке қосу</Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
           </div>
-          <div className="text-sm text-gray-500">Пайдаланушы: @{user.username} (ID: {user.id})</div>
-          <div className="font-bold text-right">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
-          <Button onClick={handlePayment} className="w-full bg-purple-700 text-white rounded-xl py-3">
-            Төлемге өту
+          {products.length > 0 && (
+            <Button onClick={() => setPage("cart")} className="w-full bg-black text-white fixed bottom-4 left-1/2 transform -translate-x-1/2 max-w-[calc(100%-2rem)] md:max-w-md z-50">
+              Себет ({cart.length}) - {total} ₸
+            </Button>
+          )}
+        </>
+      )}
+
+      {page === "cart" && (
+        <>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="font-semibold text-2xl">Себет</h2>
+            <Button variant="ghost" onClick={() => setPage("catalog")}>← Каталогқа оралу</Button>
+          </div>
+          {cart.length === 0 ? (
+            <p>Себетіңіз бос.</p>
+          ) : (
+            cart.map((p, i) => (
+              <div key={i} className="border p-3 rounded-md mb-2 flex justify-between items-center">
+                <span>{p.name} — {p.price} ₸</span>
+                {/* Мүмкін, өшіру батырмасы керек */}
+              </div>
+            ))
+          )}
+          {cart.length > 0 && (
+            <>
+                <p className="text-right font-bold text-xl mt-4">Жалпы: {total} ₸</p>
+                <Button onClick={() => setPage("address")} className="w-full mt-4">📍 Адрес енгізу</Button>
+            </>
+          )}
+        </>
+      )}
+
+      {page === "address" && (
+        <>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="font-semibold text-2xl">Адрес енгізу</h2>
+            <Button variant="ghost" onClick={() => setPage("cart")}>← Себетке оралу</Button>
+          </div>
+          {["city", "street", "entrance", "floor", "flat"].map(key => (
+            <input
+              key={key}
+              className="w-full p-3 border rounded-md bg-white text-black mb-3"
+              placeholder={(key === "city" ? "Қала (міндетті)" :
+                            key === "street" ? "Көше, үй (міндетті)" :
+                            key === "entrance" ? "Кіреберіс (подъезд)" :
+                            key === "floor" ? "Қабат (этаж)" :
+                            "Пәтер (квартира)")} // Placeholder-лерді жақсарту
+              value={(address as any)[key]}
+              onChange={e => setAddress({ ...address, [key]: e.target.value })}
+            />
+          ))}
+          <Button
+            onClick={() => {
+                if (!address.city || !address.street) {
+                    alert("Қала және көше мен үйді енгізу міндетті.");
+                    return;
+                }
+                setPage("confirm");
+            }}
+            className="w-full mt-2"
+          >
+            Растауға өту
           </Button>
-        </motion.div>
+        </>
+      )}
+
+      {page === "confirm" && user && ( // user бар екенін тексеру
+        <>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="font-semibold text-2xl">Тапсырысты растау</h2>
+            <Button variant="ghost" onClick={() => setPage("address")}>← Адресті өзгерту</Button>
+          </div>
+          <Card className="p-4 space-y-2">
+            <p><span className="font-semibold">Пайдаланушы:</span> @{user.username} (ID: {user.id})</p>
+            <p><span className="font-semibold">Жеткізу адресі:</span> {address.city}, {address.street}, кіреберіс {address.entrance || "-"}, қабат {address.floor || "-"}, пәтер {address.flat || "-"}</p>
+            <p className="font-semibold mt-2">Тауарлар:</p>
+            <ul className="list-disc list-inside pl-4">
+              {cart.map((p, i) => <li key={i}>{p.name} — {p.price} ₸</li>)}
+            </ul>
+            <p className="text-right font-bold text-xl mt-3">Жалпы сома: {total} ₸</p>
+          </Card>
+          <Button onClick={handlePayment} className="w-full bg-purple-700 text-white mt-4">
+            Төлеу және тапсырыс беру
+          </Button>
+        </>
       )}
     </div>
   );
