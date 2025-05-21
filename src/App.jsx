@@ -101,11 +101,12 @@ const fetchProducts = async () => {
               <Card className="shadow-xl rounded-2xl overflow-hidden">
                 <CardContent className="p-4 space-y-2">
                    <img
-    src={product.imageURL}
-    alt={product.name}
-    className="w-full rounded-xl"
-    onError={() => console.log("Сурет шықпады:", product.imageURL)}
-  />
+  src={product.imageURL}
+  alt={product.name}
+  className="w-full h-48 object-cover rounded-xl border"
+  onError={() => console.log("❌ Сурет шықпады:", product.imageURL)}
+/>
+
                   <div className="text-xl font-bold text-gray-800">{product.name}</div>
                   <div className="text-gray-600 text-sm">{product.description}</div>
                   <div className="text-lg font-semibold text-green-600">{product.price} ₸</div>
