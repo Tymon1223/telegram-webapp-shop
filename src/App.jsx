@@ -15,27 +15,38 @@ export default function WebAppShop() {
   const [error, setError] = useState(null);
   const [user, setUser] = useState({ id: "", username: "" });
 
-  const fetchProducts = async () => {
-    try {
-      const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
-      const data = await response.json();
-      const formatted = data.map(item => ({
+const fetchProducts = async () => {
+  try {
+    const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
+    const data = await response.json();
+
+    const formatted = data.map(item => {
+      // Сурет сілтемесін Google Drive direct link форматына айналдыру
+      const isDriveLink = item.imageURL.includes("drive.google.com");
+      const imageURL = isDriveLink
+        ? `https://drive.google.com/uc?export=view&id=${item.imageURL.split("/d/")[1].split("/")[0]}`
+        : item.imageURL;
+
+      return {
         id: item.id,
         name: item.name,
-        imageURL: item.imageURL,
+        imageURL,
         price: parseInt(item.price),
         description: item.description,
         stock: item.stock,
         size: item.size
-      }));
-      setProducts(formatted);
-    } catch (err) {
-      setError("Өнімдер жүктелмеді");
-      console.error("Fetch error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      };
+    });
+
+    setProducts(formatted);
+  } catch (err) {
+    setError("Өнімдер жүктелмеді");
+    console.error("Fetch error:", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     fetchProducts();
