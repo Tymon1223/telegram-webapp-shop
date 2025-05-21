@@ -103,7 +103,7 @@ const fetchProducts = async () => {
                    <img
   src={product.imageURL}
   alt={product.name}
-  className="w-full h-48 object-cover rounded-xl border"
+  className="w-full h-36 object-cover rounded-xl border"
   onError={() => console.log("❌ Сурет шықпады:", product.imageURL)}
 />
 
