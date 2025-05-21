@@ -74,20 +74,22 @@ export default function WebAppShop() {
   };
 
   const handlePayment = () => {
-    const order = {
-      user,
-      address,
-      products: cart,
-      total: cart.reduce((sum, p) => sum + p.price, 0),
-    };
-
-    if (window.Telegram && window.Telegram.WebApp) {
-      window.Telegram.WebApp.sendData(JSON.stringify(order));
-      console.log("📤 Тапсырыс жіберілді:", order);
-    } else {
-      console.log("❌ Telegram WebApp жоқ.");
-    }
+  const order = {
+    user,
+    address,
+    products: cart,
+    total: cart.reduce((sum, p) => sum + p.price, 0),
   };
+
+  console.log("📤 Тапсырыс жіберілді:", order); // ✅ осы шығу керек
+
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.sendData(JSON.stringify(order));
+  } else {
+    alert("❌ Telegram WebApp арқылы ашылмады!");
+  }
+};
+
 
   useEffect(() => {
     console.log("Current page:", page);
