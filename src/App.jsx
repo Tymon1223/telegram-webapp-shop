@@ -187,7 +187,7 @@ export default function WebAppShop() {
           </div>
           <div className="text-sm text-gray-500">Пайдаланушы: @{user.username} (ID: {user.id})</div>
           <div className="font-bold text-right">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
-          <Button onClick={handleSendOrder} className="w-full bg-purple-700 text-white rounded-xl py-3">
+          <Button onClick={handlePayment} className="w-full bg-purple-700 text-white rounded-xl py-3">
             Төлемге өту
           </Button>
         </motion.div>
