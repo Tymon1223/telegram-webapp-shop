@@ -81,27 +81,35 @@ export default function WebAppShop() {
   };
 
   // ✅ Telegram-ға тапсырыс жіберу
-  const handlePayment = () => {
-    const order = {
-      user,
-      address,
-      products: cart,
-      total: cart.reduce((sum, p) => sum + p.price, 0),
-    };
-
-    console.log("📤 Тапсырыс жіберілді:", order);
-
-    if (window.Telegram?.WebApp) {
-      try {
-        window.Telegram.WebApp.sendData(JSON.stringify(order));
-        console.log("✅ sendData шақырылды");
-      } catch (err) {
-        console.error("❌ sendData ERROR:", err);
-      }
-    } else {
-      alert("❌ Telegram WebApp арқылы ашылмады!");
-    }
+  const handlePayment = async () => {
+  const order = {
+    user: {
+      id: user?.id || "аноним",
+      username: user?.username || "аноним"
+    },
+    address,
+    products: cart,
+    total: cart.reduce((sum, p) => sum + p.price, 0),
   };
+
+  try {
+    const res = await fetch("https://n8n.yourdomain.com/webhook/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(order),
+    });
+
+    if (res.ok) {
+      alert("✅ Тапсырыс жіберілді!");
+      setPage("catalog"); // немесе басқа бетке өт
+    } else {
+      alert("❌ Сервер қате қайтарды.");
+    }
+  } catch (err) {
+    alert("⚠️ Байланыс қатесі: " + err.message);
+  }
+};
+
 
   return (
     <div className="p-4 space-y-4 max-w-md mx-auto">
