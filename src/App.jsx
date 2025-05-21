@@ -181,16 +181,51 @@ export default function WebAppShop() {
 
       {/* Адрес беті */}
       {page === "address" && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-          <div className="text-lg">Толық адрес мәліметтеріңізді енгізіңіз:</div>
-          <input type="text" placeholder="Қала" className="w-full p-2 border rounded-xl" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
-          <input type="text" placeholder="Көше, үй нөмірі" className="w-full p-2 border rounded-xl" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} />
-          <input type="text" placeholder="Кіреберіс" className="w-full p-2 border rounded-xl" value={address.entrance} onChange={(e) => setAddress({ ...address, entrance: e.target.value })} />
-          <input type="text" placeholder="Қабат" className="w-full p-2 border rounded-xl" value={address.floor} onChange={(e) => setAddress({ ...address, floor: e.target.value })} />
-          <input type="text" placeholder="Пәтер" className="w-full p-2 border rounded-xl" value={address.flat} onChange={(e) => setAddress({ ...address, flat: e.target.value })} />
-          <Button onClick={handleConfirmAddress} className="w-full bg-blue-700 text-white rounded-xl py-3">Растау</Button>
-        </motion.div>
-      )}
+  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+    <div className="text-lg">Толық адрес мәліметтеріңізді енгізіңіз:</div>
+
+    <input
+      type="text"
+      placeholder="Қала"
+      className="w-full p-3 rounded-xl border bg-white text-black z-10"
+      value={address.city}
+      onChange={(e) => setAddress({ ...address, city: e.target.value })}
+    />
+    <input
+      type="text"
+      placeholder="Көше, үй нөмірі"
+      className="w-full p-3 rounded-xl border bg-white text-black z-10"
+      value={address.street}
+      onChange={(e) => setAddress({ ...address, street: e.target.value })}
+    />
+    <input
+      type="text"
+      placeholder="Кіреберіс"
+      className="w-full p-3 rounded-xl border bg-white text-black z-10"
+      value={address.entrance}
+      onChange={(e) => setAddress({ ...address, entrance: e.target.value })}
+    />
+    <input
+      type="text"
+      placeholder="Қабат"
+      className="w-full p-3 rounded-xl border bg-white text-black z-10"
+      value={address.floor}
+      onChange={(e) => setAddress({ ...address, floor: e.target.value })}
+    />
+    <input
+      type="text"
+      placeholder="Пәтер"
+      className="w-full p-3 rounded-xl border bg-white text-black z-10"
+      value={address.flat}
+      onChange={(e) => setAddress({ ...address, flat: e.target.value })}
+    />
+
+    <Button onClick={handleConfirmAddress} className="w-full bg-blue-700 text-white rounded-xl py-3">
+      Растау
+    </Button>
+  </motion.div>
+)}
+
 
       {/* Тапсырыс растау беті */}
       {page === "confirm" && (
