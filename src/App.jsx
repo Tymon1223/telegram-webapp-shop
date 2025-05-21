@@ -26,6 +26,18 @@ const Loading = () => (
   </div>
 );
 
+const ErrorDisplay = ({ message }) => (
+    <div className="p-4 max-w-md mx-auto text-center">
+      <div className="text-red-700 text-lg p-4 border border-red-500 rounded-md bg-red-100">
+          <p className="font-semibold">Қате:</p>
+          <p>{message}</p>
+          <Button onClick={() => window.location.reload()} className="mt-4 bg-red-600 hover:bg-red-700 text-white">
+              Қайта жүктеу
+          </Button>
+      </div>
+    </div>
+  );
+
 
 import { motion } from "framer-motion";
 
@@ -59,18 +71,19 @@ export default function WebAppShop() {
   const [page, setPage] = useState("catalog");
   const [address, setAddress] = useState({ city: "", street: "", entrance: "", floor: "", flat: "" });
   const [animateAdd, setAnimateAdd] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [user, setUser] = useState({ id: "", username: "" }); // Using your initial state
+  const [loading, setLoading] = useState(true); // For product loading
+  const [error, setError] = useState(null); // For critical errors (no products, not in Telegram)
+  const [userWarning, setUserWarning] = useState(null); // For non-critical warnings (no user details)
+  const [user, setUser] = useState(null); // Initialize user as null
   const [enhancingProductId, setEnhancingProductId] = useState(null);
 
   // ✅ Өнімдерді жүктеу
   const fetchProducts = async () => {
-    setLoading(true); // Ensure loading is true at the start of fetch
-    setError(null); // Clear previous errors
+    setLoading(true); 
+    setError(null); 
     try {
       const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
-      if (!response.ok) { // Check for HTTP errors
+      if (!response.ok) {
           throw new Error(`HTTP error ${response.status}`);
       }
       const data = await response.json();
@@ -92,11 +105,11 @@ export default function WebAppShop() {
               imageURL = `https://drive.google.com/uc?export=view&id=${idPart}`;
             } else {
               console.warn(`Could not parse Google Drive URL (item index ${index}):`, rawImageURL);
-              imageURL = ''; // Fallback if structure is unexpected
+              imageURL = ''; 
             }
           } catch (splitError) {
             console.error(`Error parsing Google Drive URL (item index ${index}):`, rawImageURL, splitError);
-            imageURL = ''; // Fallback
+            imageURL = ''; 
           }
         }
         
@@ -104,18 +117,18 @@ export default function WebAppShop() {
           id: ensureStringForRender(item.id || crypto.randomUUID(), `item[${index}].id`),
           name: ensureStringForRender(item.name, `item[${index}].name`, "Атауы жоқ"),
           imageURL: ensureStringForRender(imageURL, `item[${index}].imageURL_final`),
-          price: parseInt(item.price, 10) || 0, // Ensure base 10 and fallback
+          price: parseInt(item.price, 10) || 0, 
           description: ensureStringForRender(item.description, `item[${index}].description`, "Сипаттамасы жоқ"),
-          stock: ensureStringForRender(item.stock, `item[${index}].stock`), // Assuming stock can be string
-          size: ensureStringForRender(item.size, `item[${index}].size`),   // Assuming size can be string
-          enhancedDescription: null, // For Gemini generated description
+          stock: ensureStringForRender(item.stock, `item[${index}].stock`), 
+          size: ensureStringForRender(item.size, `item[${index}].size`),   
+          enhancedDescription: null, 
         };
       });
 
       setProducts(formatted);
     } catch (err) {
-      setError("Өнімдер жүктелмеді");
       console.error("Fetch error:", err);
+      setError("Өнімдерді жүктеу кезінде қате пайда болды. Бетті қайта жүктеп көріңіз."); // More specific error
     } finally {
       setLoading(false);
     }
@@ -125,24 +138,34 @@ export default function WebAppShop() {
     fetchProducts();
 
     if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-      window.Telegram.WebApp.ready();
-      window.Telegram.WebApp.expand(); 
+      try {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand(); 
 
-      const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-      console.log("Telegram initDataUnsafe:", initDataUnsafe);
+        const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
+        console.log("Telegram initDataUnsafe:", initDataUnsafe);
 
-      if (initDataUnsafe?.user) {
-        setUser({
-          id: ensureStringForRender(initDataUnsafe.user.id, 'user.id_telegram'),
-          username: ensureStringForRender(initDataUnsafe.user.username, 'user.username_telegram', "(Анықталмаған)")
-        });
-      } else {
-        // alert("❌ Telegram пайдаланушы мәліметтері жоқ"); // Kept your alert
-        console.warn("❌ Telegram пайдаланушы мәліметтері жоқ"); // Using console.warn instead of alert for better UX during dev
+        if (initDataUnsafe?.user?.id) { // Check for user.id specifically
+          setUser({
+            id: ensureStringForRender(initDataUnsafe.user.id, 'user.id_telegram'),
+            username: ensureStringForRender(initDataUnsafe.user.username, 'user.username_telegram', "(Анықталмаған)")
+          });
+          setUserWarning(null); // Clear warning if user data is found
+          console.log("User data successfully retrieved:", initDataUnsafe.user);
+        } else {
+          setUser(null); // Explicitly set user to null
+          console.warn("❌ Telegram user data not found or incomplete in initDataUnsafe.");
+          setUserWarning("Telegram пайдаланушы ақпараты табылмады. Тапсырыстар \"аноним\" ретінде жіберіледі. Толыққанды жұмыс үшін бот арқылы дұрыс кіргеніңізді тексеріңіз.");
+        }
+      } catch (e) {
+          console.error("Error during Telegram WebApp initialization:", e);
+          setUser(null);
+          setError("Telegram WebApp жүйесін инициализациялау кезінде қате пайда болды. Telegram ішінде ашқаныңызға көз жеткізіңіз.");
       }
     } else {
-      // alert("❌ Telegram WebApp арқылы ашу қажет!"); // Kept your alert
-      console.warn("❌ Telegram WebApp арқылы ашу қажет!"); // Using console.warn
+      console.warn("❌ Telegram WebApp context not found. App may not function correctly outside Telegram.");
+      setUser(null);
+      setError("Бұл дүкенді Telegram боты арқылы ашыңыз. Қазіргі ортада Telegram WebApp мүмкіндіктері қолжетімсіз.");
     }
   }, []);
 
@@ -158,7 +181,7 @@ export default function WebAppShop() {
       
       let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
       const payload = { contents: chatHistory };
-      const apiKey = ""; // Per instructions, leave empty
+      const apiKey = ""; 
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
       
       const response = await fetch(apiUrl, {
@@ -205,7 +228,6 @@ export default function WebAppShop() {
 
   const handleConfirmAddress = () => {
     console.log("Confirmed address:", address);
-    // Basic validation
     if (!address.city.trim() || !address.street.trim()) {
         alert("Қала және Көше, үй нөмірі өрістері міндетті.");
         return;
@@ -226,8 +248,8 @@ export default function WebAppShop() {
 
     const order = {
       user: {
-        id: user?.id || "аноним",
-        username: user?.username || "аноним"
+        id: user?.id || "аноним", // Fallback to "аноним" if user or user.id is null/undefined
+        username: user?.username || "аноним" // Fallback for username
       },
       address,
       products: cart,
@@ -243,8 +265,8 @@ export default function WebAppShop() {
 
       if (res.ok) {
         alert("✅ Тапсырыс жіберілді!");
-        setCart([]); // Clear cart on successful order
-        setPage("catalog"); // Go back to catalog
+        setCart([]); 
+        setPage("catalog"); 
       } else {
         const errorText = await res.text();
         alert(`❌ Сервер жауап қатпады. Статус: ${res.status}. Қате: ${errorText}`);
@@ -254,14 +276,27 @@ export default function WebAppShop() {
     }
   };
 
-  return (
-    <div className="p-4 space-y-4 max-w-md mx-auto pb-20"> {/* Added padding-bottom */}
-      {page === "catalog" && (
-        <div className="space-y-4"> {/* Changed grid to space-y-4 for better layout with buttons */}
-          {loading && <Loading />}
-          {error && <div className="text-red-600 p-3 bg-red-100 border border-red-400 rounded-md">{error}</div>}
+  if (loading) {
+      return <Loading />;
+  }
 
-          {!loading && !error && products.map((product) => (
+  if (error) { // Critical error (e.g., not in Telegram, products failed to load)
+      return <ErrorDisplay message={error} />;
+  }
+
+
+  return (
+    <div className="p-4 space-y-4 max-w-md mx-auto pb-20">
+      {userWarning && !error && page === "catalog" && (
+         <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-md text-sm mb-4 shadow">
+            <p><span className="font-bold">Назар аударыңыз:</span> {userWarning}</p>
+         </div>
+      )}
+
+      {page === "catalog" && (
+        <div className="space-y-4"> 
+          {/* Loading and error for products are handled above the main return now */}
+          {products.map((product) => (
             <motion.div
               key={product.id}
               initial={{ opacity: 0, y: 20 }}
@@ -273,14 +308,14 @@ export default function WebAppShop() {
                   <img
                     src={product.imageURL}
                     alt={product.name}
-                    className="w-full h-48 object-cover rounded-xl border" // Increased height
+                    className="w-full h-48 object-cover rounded-xl border" 
                     onError={(e) => {
                         e.currentTarget.src = 'https://placehold.co/600x400/E2E8F0/94A3B8?text=Сурет+жоқ';
                         e.currentTarget.alt = 'Сурет жүктелмеді';
                     }}
                   />
                   <div className="text-xl font-bold text-gray-800">{product.name}</div>
-                  <p className="text-gray-600 text-sm min-h-[3em]">{product.description}</p> {/* min-height for description */}
+                  <p className="text-gray-600 text-sm min-h-[3em]">{product.description}</p>
                   
                   {product.enhancedDescription && (
                     <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded-md">
@@ -303,12 +338,12 @@ export default function WebAppShop() {
                   </motion.div>
 
                   <motion.div
-                    whileTap={{ scale: 0.98 }} // Adjusted scale
-                    animate={animateAdd === product.id ? { scale: [1, 1.05, 1] } : {}} // Adjusted animation
+                    whileTap={{ scale: 0.98 }} 
+                    animate={animateAdd === product.id ? { scale: [1, 1.05, 1] } : {}} 
                     transition={{ duration: 0.3 }}
                     className="mt-1"
                   >
-                    <Button onClick={() => addToCart(product)} className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2.5"> {/* Adjusted padding */}
+                    <Button onClick={() => addToCart(product)} className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2.5"> 
                       Себетке қосу
                     </Button>
                   </motion.div>
@@ -317,8 +352,8 @@ export default function WebAppShop() {
             </motion.div>
           ))}
 
-          {!loading && !error && products.length > 0 && ( // Show cart button only if products exist
-            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-50"> {/* Fixed positioning */}
+          {products.length > 0 && ( 
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-50"> 
               <Button onClick={() => setPage("cart")} className="w-full bg-black text-white rounded-xl py-3 text-lg relative shadow-lg">
                 Себетке өту
                 {cart.length > 0 && (
@@ -329,7 +364,7 @@ export default function WebAppShop() {
               </Button>
             </div>
           )}
-           {!loading && !error && products.length === 0 && (
+           {products.length === 0 && ( // Show this if no products and no error/loading
              <div className="text-center text-gray-500 py-10">Өнімдер табылмады.</div>
            )}
         </div>
@@ -349,7 +384,6 @@ export default function WebAppShop() {
                 <div>
                     <span className="font-medium">{item.name}</span> — <span className="font-semibold">{item.price} ₸</span>
                 </div>
-                {/* Optional: Add a remove from cart button here */}
               </div>
             ))
           )}
@@ -414,7 +448,7 @@ export default function WebAppShop() {
             {address.flat && <p><span className="font-medium">Пәтер:</span> {address.flat}</p>}
           </div>
           <hr className="my-2"/>
-          <div className="text-sm text-gray-600">Пайдаланушы: @{user.username || "аноним"} (ID: {user.id || "аноним"})</div>
+          <div className="text-sm text-gray-600">Пайдаланушы: @{user?.username || "аноним"} (ID: {user?.id || "аноним"})</div>
           <hr className="my-2"/>
           <p className="font-semibold text-md">Тауарлар:</p>
           {cart.map((item, idx) => (
