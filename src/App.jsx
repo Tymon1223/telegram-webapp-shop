@@ -48,26 +48,21 @@ export default function WebAppShop() {
 
   // ✅ Telegram WebApp арқылы келген user дерегін алу
   useEffect(() => {
-    fetchProducts();
+  if (window.Telegram?.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand(); 
 
-    if (window.Telegram?.WebApp) {
-      window.Telegram.WebApp.ready();
-
-      const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe;
-      console.log("Telegram initDataUnsafe:", initDataUnsafe);
-
-      if (initDataUnsafe?.user) {
-        setUser({
-          id: initDataUnsafe.user.id.toString(),
-          username: initDataUnsafe.user.username || "(Анықталмаған)"
-        });
-      } else {
-        alert("❌ Telegram пайдаланушы мәліметтері жоқ");
-      }
-    } else {
-      alert("❌ Telegram WebApp арқылы ашу қажет!");
+    const { user } = window.Telegram.WebApp.initDataUnsafe;
+    console.log("TG user:", user);
+    if (user) {
+      setUser({
+        id: user.id.toString(),
+        username: user.username
+      });
     }
-  }, []);
+  }
+}, []);
+
 
   const addToCart = (product) => {
     setCart((prev) => [...prev, product]);
