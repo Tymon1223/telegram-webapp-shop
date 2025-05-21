@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import Loading from "./components/Loading";
 
-
 export default function WebAppShop() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
@@ -15,39 +14,37 @@ export default function WebAppShop() {
   const [error, setError] = useState(null);
   const [user, setUser] = useState({ id: "", username: "" });
 
-const fetchProducts = async () => {
-  try {
-    const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
-    const data = await response.json();
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
+      const data = await response.json();
 
-    const formatted = data.map(item => {
-      console.log("imageURL:", item.imageURL);
-      // Сурет сілтемесін Google Drive direct link форматына айналдыру
-      const isDriveLink = item.imageURL.includes("drive.google.com");
-      const imageURL = isDriveLink
-        ? `https://drive.google.com/uc?export=view&id=${item.imageURL.split("/d/")[1].split("/")[0]}`
-        : item.imageURL;
+      const formatted = data.map(item => {
+        console.log("imageURL:", item.imageURL);
+        const isDriveLink = item.imageURL.includes("drive.google.com");
+        const imageURL = isDriveLink
+          ? `https://drive.google.com/uc?export=view&id=${item.imageURL.split("/d/")[1].split("/")[0]}`
+          : item.imageURL;
 
-      return {
-        id: item.id,
-        name: item.name,
-        imageURL,
-        price: parseInt(item.price),
-        description: item.description,
-        stock: item.stock,
-        size: item.size
-      };
-    });
+        return {
+          id: item.id,
+          name: item.name,
+          imageURL,
+          price: parseInt(item.price),
+          description: item.description,
+          stock: item.stock,
+          size: item.size
+        };
+      });
 
-    setProducts(formatted);
-  } catch (err) {
-    setError("Өнімдер жүктелмеді");
-    console.error("Fetch error:", err);
-  } finally {
-    setLoading(false);
-  }
-};
-
+      setProducts(formatted);
+    } catch (err) {
+      setError("Өнімдер жүктелмеді");
+      console.error("Fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -76,6 +73,22 @@ const fetchProducts = async () => {
     setPage("confirm");
   };
 
+  const handlePayment = () => {
+    const order = {
+      user,
+      address,
+      products: cart,
+      total: cart.reduce((sum, p) => sum + p.price, 0),
+    };
+
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.sendData(JSON.stringify(order));
+      console.log("📤 Тапсырыс жіберілді:", order);
+    } else {
+      console.log("❌ Telegram WebApp жоқ.");
+    }
+  };
+
   useEffect(() => {
     console.log("Current page:", page);
   }, [page]);
@@ -100,13 +113,12 @@ const fetchProducts = async () => {
             >
               <Card className="shadow-xl rounded-2xl overflow-hidden">
                 <CardContent className="p-4 space-y-2">
-                   <img
-  src={product.imageURL}
-  alt={product.name}
-  className="w-full h-36 object-cover rounded-xl border"
-  onError={() => console.log("❌ Сурет шықпады:", product.imageURL)}
-/>
-
+                  <img
+                    src={product.imageURL}
+                    alt={product.name}
+                    className="w-full h-36 object-cover rounded-xl border"
+                    onError={() => console.log("❌ Сурет шықпады:", product.imageURL)}
+                  />
                   <div className="text-xl font-bold text-gray-800">{product.name}</div>
                   <div className="text-gray-600 text-sm">{product.description}</div>
                   <div className="text-lg font-semibold text-green-600">{product.price} ₸</div>
@@ -155,60 +167,14 @@ const fetchProducts = async () => {
       {page === "address" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <div className="text-lg">Толық адрес мәліметтеріңізді енгізіңіз:</div>
-          <input
-            type="text"
-            placeholder="Қала"
-            className="w-full p-2 border rounded-xl"
-            value={address.city}
-            onChange={(e) => setAddress({ ...address, city: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Көше, үй нөмірі"
-            className="w-full p-2 border rounded-xl"
-            value={address.street}
-            onChange={(e) => setAddress({ ...address, street: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Кіреберіс"
-            className="w-full p-2 border rounded-xl"
-            value={address.entrance}
-            onChange={(e) => setAddress({ ...address, entrance: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Қабат"
-            className="w-full p-2 border rounded-xl"
-            value={address.floor}
-            onChange={(e) => setAddress({ ...address, floor: e.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="Пәтер"
-            className="w-full p-2 border rounded-xl"
-            value={address.flat}
-            onChange={(e) => setAddress({ ...address, flat: e.target.value })}
-          />
+          <input type="text" placeholder="Қала" className="w-full p-2 border rounded-xl" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
+          <input type="text" placeholder="Көше, үй нөмірі" className="w-full p-2 border rounded-xl" value={address.street} onChange={(e) => setAddress({ ...address, street: e.target.value })} />
+          <input type="text" placeholder="Кіреберіс" className="w-full p-2 border rounded-xl" value={address.entrance} onChange={(e) => setAddress({ ...address, entrance: e.target.value })} />
+          <input type="text" placeholder="Қабат" className="w-full p-2 border rounded-xl" value={address.floor} onChange={(e) => setAddress({ ...address, floor: e.target.value })} />
+          <input type="text" placeholder="Пәтер" className="w-full p-2 border rounded-xl" value={address.flat} onChange={(e) => setAddress({ ...address, flat: e.target.value })} />
           <Button onClick={handleConfirmAddress} className="w-full bg-blue-700 text-white rounded-xl py-3">Растау</Button>
         </motion.div>
       )}
-      const handlePayment = () => {
-  const order = {
-    user,
-    address,
-    products: cart,
-    total: cart.reduce((sum, p) => sum + p.price, 0),
-  };
-
-  if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.sendData(JSON.stringify(order));
-    console.log("📤 Тапсырыс жіберілді:", order);
-  } else {
-    console.log("❌ Telegram WebApp жоқ.");
-  }
-};
-
 
       {page === "confirm" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
@@ -221,13 +187,9 @@ const fetchProducts = async () => {
           </div>
           <div className="text-sm text-gray-500">Пайдаланушы: @{user.username} (ID: {user.id})</div>
           <div className="font-bold text-right">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
-          <Button
-  onClick={handlePayment}
-  className="w-full bg-purple-700 text-white rounded-xl py-3"
->
-  Төлемге өту
-</Button>
-
+          <Button onClick={handlePayment} className="w-full bg-purple-700 text-white rounded-xl py-3">
+            Төлемге өту
+          </Button>
         </motion.div>
       )}
     </div>
