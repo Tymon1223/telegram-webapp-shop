@@ -66,12 +66,6 @@ const ensureStringForRender = (value, fieldName = 'unknown field', defaultValue 
 // Placeholder QR Code URL - REPLACE THIS WITH YOUR ACTUAL QR CODE IMAGE URL
 const PAYMENT_QR_CODE_URL = "https://placehold.co/300x300/E2E8F0/94A3B8?text=QR+CODE+%C3%9CRNEGI%0A(Kaspi%2C+Halyk+etc)";
 
-// !!! PROVIDED KEYS - FOR TESTING ONLY - HIGHLY INSECURE CLIENT-SIDE !!!
-const GOOGLE_API_KEY = 'AIzaSyDI-EXEiBI4XxQfiTAhlZG0Mb2lpyrvxDY'; // СІЗ БЕРГЕН API КІЛТІ
-const SPREADSHEET_ID = '1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk'; // НЕГІЗГІ GOOGLE SHEET ID
-const PRODUCT_SHEET_NAME = 'Sheet1'; // Өнімдер сақталатын парақтың атауы
-const ORDER_SHEET_NAME = 'Sheet2';   // Тапсырыстар сақталатын парақтың атауы
-
 
 export default function WebAppShop() {
   const [products, setProducts] = useState([]);
@@ -85,20 +79,18 @@ export default function WebAppShop() {
   const [userWarning, setUserWarning] = useState(null); 
   const [user, setUser] = useState(null); 
   const [enhancingProductId, setEnhancingProductId] = useState(null);
-  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false); 
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false); // For payment submission loading state
 
 
   const fetchProducts = async () => {
     try {
-      const productsSheetUrl = `https://opensheet.elk.sh/${SPREADSHEET_ID}/${PRODUCT_SHEET_NAME}`;
-      console.log("Fetching products from:", productsSheetUrl);
-      const response = await fetch(productsSheetUrl);
+      const response = await fetch("https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1");
       if (!response.ok) {
           throw new Error(`HTTP error ${response.status} while fetching products`);
       }
       const data = await response.json();
       if (!Array.isArray(data)) {
-          console.error("Fetched product data is not an array:", data);
+          console.error("Fetched data is not an array:", data);
           throw new Error("Өнім деректері жарамсыз форматта келді.");
       }
 
@@ -207,8 +199,8 @@ export default function WebAppShop() {
       
       let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
       const payload = { contents: chatHistory };
-      const geminiApiKey = ""; // Per previous instructions, if needed by Canvas
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+      const apiKey = ""; 
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
       
       const response = await fetch(apiUrl, {
                  method: 'POST',
@@ -286,84 +278,49 @@ export default function WebAppShop() {
   const handleOrderSubmission = async () => {
     setIsSubmittingOrder(true);
     const orderTotal = cart.reduce((sum, p) => sum + p.price, 0);
+    // Validation is already done before this point, but good to have a quick check
     if (cart.length === 0) {
-        alert("Себет бос.");
+        alert("Себет бос."); // Should not happen if flow is correct
         setIsSubmittingOrder(false);
         return;
     }
 
     const clientSideOrderId = `WEBAPP-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const orderTimestamp = new Date().toISOString();
 
-    const orderValues = [
-        clientSideOrderId,
-        orderTimestamp,
-        contactDetails.fullName,
-        contactDetails.phoneNumber,
-        contactDetails.telegramUserID || (user?.id || "Контексттен алынбады"), 
-        user?.username || "Контексттен алынбады",
-        `${address.city}, ${address.street}, ${address.entrance || ''}, ${address.floor || ''}, ${address.flat || ''}`,
-        cart.map(p => `${p.name} (x${p.quantity || 1}) - ${p.price}₸`).join('; '),
-        orderTotal,
-        "Жаңа" 
-    ];
-
-    const bodyForGoogleSheet = {
-      values: [orderValues],
+    const order = {
+      clientOrderId: clientSideOrderId,
+      userContext: { 
+        id: user?.id || "Контексттен алынбады", 
+        username: user?.username || "Контексттен алынбады"
+      },
+      contactInfo: contactDetails, 
+      deliveryAddress: address, 
+      products: cart,
+      total: orderTotal,
+      orderTimestamp: new Date().toISOString()
     };
 
-    console.log("Attempting to write order directly to Google Sheets (INSECURE METHOD - FOR TESTING ONLY):", bodyForGoogleSheet);
+    console.log("Sending order to webhook:", order);
+
     try {
-      const range = `${ORDER_SHEET_NAME}!A1:append`; 
-      const sheetsApiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?valueInputOption=USER_ENTERED&key=${GOOGLE_API_KEY}`;
-      
-      const res = await fetch(sheetsApiUrl, {
+      const res = await fetch("https://alphabotai.app.n8n.cloud/webhook-test/49eb5226-ed25-40e6-a3fc-272616c5a1a0", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(bodyForGoogleSheet),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order),
       });
 
       if (res.ok) {
-        const result = await res.json();
-        console.log("Successfully wrote to Google Sheets:", result);
-        alert(`✅ Тапсырыс №${clientSideOrderId} Google Sheet-ке (${ORDER_SHEET_NAME} парағына) сәтті жазылды! Тапсырыс статусы туралы Telegram ботынан хабарлама күтіңіз.`);
-        
-        const n8nOrderPayload = {
-            clientOrderId: clientSideOrderId,
-            userContext: { id: user?.id || "Контексттен алынбады", username: user?.username || "Контексттен алынбады" },
-            contactInfo: contactDetails,
-            deliveryAddress: address,
-            products: cart,
-            total: orderTotal,
-            orderTimestamp: orderTimestamp,
-            googleSheetStatus: "Successfully written" 
-        };
-        try {
-            const n8nRes = await fetch("https://alphabotai.app.n8n.cloud/webhook-test/49eb5226-ed25-40e6-a3fc-272616c5a1a0", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(n8nOrderPayload),
-            });
-            if (n8nRes.ok) console.log("Order data also sent to n8n webhook for admin notification.");
-            else console.warn("Failed to send order data to n8n webhook.");
-        } catch (n8nErr) {
-            console.error("Error sending order data to n8n webhook:", n8nErr);
-        }
-
+        alert(`✅ Тапсырыс №${clientSideOrderId} сәтті жіберілді! Тапсырыс статусы туралы Telegram ботынан хабарлама күтіңіз.`);
         setCart([]); 
         setContactDetails({ fullName: "", phoneNumber: "", telegramUserID: "" }); 
         setAddress({ city: "", street: "", entrance: "", floor: "", flat: "" }); 
         setPage("catalog"); 
       } else {
-        const errorData = await res.json(); 
-        console.error("Error writing to Google Sheets:", errorData);
-        alert(`❌ Google Sheet-ке жазу кезінде қате. Статус: ${res.status}. Қате: ${errorData?.error?.message || JSON.stringify(errorData)}`);
+        const errorText = await res.text();
+        alert(`❌ Сервер жауап қатпады. Статус: ${res.status}. Қате: ${errorText}`);
       }
     } catch (err) {
-      console.error("Network or other error writing to Google Sheets:", err);
-      alert("⚠️ Google Sheet-ке жазу кезінде желі қатесі: " + err.message);
+      alert("⚠️ Тапсырысты жіберу кезінде қате: " + err.message);
     } finally {
       setIsSubmittingOrder(false);
     }
@@ -597,7 +554,7 @@ export default function WebAppShop() {
           <div className="font-bold text-right text-xl">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
           
           <Button onClick={proceedToQrPayment} className="w-full bg-purple-700 hover:bg-purple-800 text-white rounded-xl py-3 text-lg mt-3">
-            Төлем жасауға өту (QR)
+            Төлеу және тапсырыс беру
           </Button>
         </motion.div>
       )}
