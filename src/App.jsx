@@ -67,6 +67,18 @@ const ensureStringForRender = (value, fieldName = 'unknown field', defaultValue 
 const APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwLSMYSH2s3uG3CvKOzDXTmaFcA2AoN5J3EPCVHTZXCNszQeZJTh2-UwQoeTPUkO6oI/exec'; // СІЗ БЕРГЕН APPS SCRIPT URL
 const N8N_ADMIN_NOTIFICATION_WEBHOOK_URL = "https://alphabotai.app.n8n.cloud/webhook-test/49eb5226-ed25-40e6-a3fc-272616c5a1a0"; // For admin notifications (optional)
 
+const availableColors = [
+    { name: "Қызыл", value: "red", hex: "#EF4444" },
+    { name: "Көк", value: "blue", hex: "#3B82F6" },
+    { name: "Жасыл", value: "green", hex: "#22C55E" },
+    { name: "Қара", value: "black", hex: "#000000" },
+    { name: "Ақ", value: "white", hex: "#FFFFFF" },
+    { name: "Сұр", value: "grey", hex: "#6B7280" },
+    { name: "Сары", value: "yellow", hex: "#F59E0B" },
+    { name: "Қызғылт", value: "pink", hex: "#EC4899" },
+];
+
+
 export default function WebAppShop() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
@@ -74,12 +86,13 @@ export default function WebAppShop() {
   const [contactDetails, setContactDetails] = useState({ fullName: "", phoneNumber: "", telegramUserID: "" });
   const [address, setAddress] = useState({ city: "", street: "", entrance: "", floor: "", flat: "" });
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("card"); // "card" or "kaspi"
+  const [selectedProductColor, setSelectedProductColor] = useState(""); // New state for selected color
   const [animateAdd, setAnimateAdd] = useState(null);
   const [appLoading, setAppLoading] = useState(true); 
   const [error, setError] = useState(null); 
   const [userWarning, setUserWarning] = useState(null); 
   const [user, setUser] = useState(null); 
-  const [enhancingProductId, setEnhancingProductId] = useState(null);
+  // AI Description enhancement state removed: const [enhancingProductId, setEnhancingProductId] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false); 
 
 
@@ -125,8 +138,8 @@ export default function WebAppShop() {
           price: parseInt(item.price, 10) || 0, 
           description: ensureStringForRender(item.description, `item[${index}].description`, "Сипаттамасы жоқ"),
           stock: ensureStringForRender(item.stock, `item[${index}].stock`), 
-          size: ensureStringForRender(item.size, `item[${index}].size`),   
-          enhancedDescription: null, 
+          size: ensureStringForRender(item.size, `item[${index}].size`),   // Size is fetched
+          // enhancedDescription removed
         };
       });
       setProducts(formatted);
@@ -191,55 +204,7 @@ export default function WebAppShop() {
     initializeApp();
   }, []);
 
-
-  const handleEnhanceDescription = async (productId) => {
-    const product = products.find(p => p.id === productId);
-    if (!product) return;
-
-    setEnhancingProductId(productId);
-    try {
-      const prompt = `Enhance this product description for an e-commerce store. Make it more appealing, highlight key features, and encourage purchase. Keep it concise (2-3 sentences). Product Name: "${product.name}". Current Description: "${product.description}"`;
-      
-      let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-      const payload = { contents: chatHistory };
-      const geminiApiKey = ""; 
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
-      
-      const response = await fetch(apiUrl, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify(payload)
-             });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(`Gemini API request failed with status ${response.status}: ${errorBody}`);
-      }
-      
-      const result = await response.json();
-
-      if (result.candidates && result.candidates.length > 0 &&
-          result.candidates[0].content && result.candidates[0].content.parts &&
-          result.candidates[0].content.parts.length > 0) {
-        const enhancedText = result.candidates[0].content.parts[0].text;
-        setProducts(prevProducts =>
-          prevProducts.map(p =>
-            p.id === productId
-              ? { ...p, enhancedDescription: enhancedText.trim() }
-              : p
-          )
-        );
-      } else {
-        console.error("Unexpected response structure from Gemini API:", result);
-        throw new Error("Failed to get enhanced description from Gemini API due to unexpected response structure.");
-      }
-    } catch (e) {
-      console.error("Error enhancing description:", e);
-      alert(`Сипаттаманы жақсарту мүмкін болмады: ${e.message}`);
-    } finally {
-      setEnhancingProductId(null);
-    }
-  };
+  // handleEnhanceDescription function removed
 
   const addToCart = (product) => {
     setCart((prev) => [...prev, product]);
@@ -261,7 +226,12 @@ export default function WebAppShop() {
         alert("Телефон нөміріңізді енгізіңіз.");
         return;
     }
-    console.log("Contact details confirmed:", contactDetails);
+    // Color selection is now part of this page
+    if (!selectedProductColor) {
+        alert("Тауардың өңін таңдаңыз.");
+        return;
+    }
+    console.log("Contact details and color confirmed:", contactDetails, selectedProductColor);
     setPage("address");
   };
   
@@ -300,7 +270,8 @@ export default function WebAppShop() {
         deliveryAddress: address, 
         products: cart,
         total: orderTotal,
-        paymentMethod: selectedPaymentMethod, // Таңдалған төлем әдісін қосу
+        paymentMethod: selectedPaymentMethod,
+        selectedColor: selectedProductColor, // Added selected color
         orderTimestamp: orderTimestamp
     };
 
@@ -343,6 +314,7 @@ export default function WebAppShop() {
         setCart([]); 
         setContactDetails({ fullName: "", phoneNumber: "", telegramUserID: "" }); 
         setAddress({ city: "", street: "", entrance: "", floor: "", flat: "" }); 
+        setSelectedProductColor(""); // Reset selected color
         setPage("catalog"); 
       } else {
         const errorText = await res.text(); 
@@ -375,55 +347,45 @@ export default function WebAppShop() {
       )}
 
       {page === "catalog" && (
-        <div className="space-y-4"> 
+        // Updated grid layout for 3 columns on md screens and above
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"> 
           {products.map((product) => (
             <motion.div
               key={product.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
+              className="flex flex-col" // Added for consistent height if needed
             >
-              <Card className="shadow-xl rounded-2xl overflow-hidden">
-                <CardContent className="p-4 space-y-2">
+              <Card className="shadow-xl rounded-2xl overflow-hidden h-full flex flex-col"> {/* Added h-full and flex flex-col */}
+                <CardContent className="p-4 space-y-2 flex flex-col flex-grow"> {/* Added flex-grow */}
                   <img
                     src={product.imageURL}
                     alt={product.name}
-                    className="w-full h-48 object-cover rounded-xl border" 
+                    className="w-full h-40 object-cover rounded-xl border" // Adjusted height for 3 columns
                     onError={(e) => {
-                        e.currentTarget.src = 'https://placehold.co/600x400/E2E8F0/94A3B8?text=Сурет+жоқ';
+                        e.currentTarget.src = 'https://placehold.co/400x300/E2E8F0/94A3B8?text=Сурет+жоқ';
                         e.currentTarget.alt = 'Сурет жүктелмеді';
                     }}
                   />
-                  <div className="text-xl font-bold text-gray-800">{product.name}</div>
-                  <p className="text-gray-600 text-sm min-h-[3em]">{product.description}</p>
+                  <div className="text-lg font-bold text-gray-800 mt-2">{product.name}</div>
+                  <p className="text-gray-600 text-xs min-h-[2.5em] flex-grow">{product.description}</p> {/* Adjusted text size and min-height */}
                   
-                  {product.enhancedDescription && (
-                    <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded-md">
-                        <p className="text-sm text-purple-700">
-                            <span className="font-semibold">✨ AI Жақсартқан Сипаттама:</span> {product.enhancedDescription}
-                        </p>
-                    </div>
+                  {product.size && ( // Display product size if available
+                    <p className="text-xs text-gray-500 mt-1">Өлшемі: {product.size}</p>
                   )}
 
-                  <div className="text-lg font-semibold text-green-600 mt-1">{product.price} ₸</div>
+                  <div className="text-md font-semibold text-green-600 mt-1">{product.price} ₸</div>
                   
-                  <motion.div className="mt-2" whileTap={{ scale: 0.98 }}>
-                     <Button 
-                        onClick={() => handleEnhanceDescription(product.id)}
-                        disabled={enhancingProductId === product.id || !!product.enhancedDescription}
-                        className="w-full rounded-lg text-xs py-1.5 bg-purple-500 hover:bg-purple-600 text-white"
-                    >
-                      {enhancingProductId === product.id ? "✨ Жақсартуда..." : product.enhancedDescription ? "✓ Жақсартылған" : "✨ Сипаттаманы AI-мен жақсарту"}
-                    </Button>
-                  </motion.div>
+                  {/* AI Description enhancement button removed */}
 
                   <motion.div
                     whileTap={{ scale: 0.98 }} 
                     animate={animateAdd === product.id ? { scale: [1, 1.05, 1] } : {}} 
                     transition={{ duration: 0.3 }}
-                    className="mt-1"
+                    className="mt-auto pt-2" // Added mt-auto to push button to bottom
                   >
-                    <Button onClick={() => addToCart(product)} className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2.5"> 
+                    <Button onClick={() => addToCart(product)} className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2 text-sm"> 
                       Себетке қосу
                     </Button>
                   </motion.div>
@@ -433,7 +395,7 @@ export default function WebAppShop() {
           ))}
 
           {products.length > 0 && ( 
-            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-50"> 
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-50 md:col-span-3 sm:col-span-2 col-span-1"> {/* Ensure button spans full width below grid */}
               <Button onClick={() => {
                   if (cart.length === 0) {
                       alert("Себет бос. Алдымен өнім қосыңыз.");
@@ -447,7 +409,7 @@ export default function WebAppShop() {
             </div>
           )}
            {products.length === 0 && !appLoading && !error && ( 
-             <div className="text-center text-gray-500 py-10">Өнімдер табылмады.</div>
+             <div className="text-center text-gray-500 py-10 md:col-span-3 sm:col-span-2 col-span-1">Өнімдер табылмады.</div>
            )}
         </div>
       )}
@@ -506,7 +468,29 @@ export default function WebAppShop() {
               UserID-іңізді білмесеңіз, Telegram-да <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">@userinfobot</a>-қа `/start` деп жазып біле аласыз. Бұл бізге сізбен байланысуға көмектеседі.
             </p>
           </div>
-          <Button onClick={handleProceedToAddress} className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3 text-lg mt-2">
+          {/* Color Selection Section */}
+          <div className="pt-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Тауардың өңін таңдаңыз *</label>
+            <div className="flex flex-wrap gap-2">
+                {availableColors.map(color => (
+                    <button
+                        key={color.value}
+                        type="button"
+                        onClick={() => setSelectedProductColor(color.value)}
+                        className={`w-8 h-8 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-offset-1
+                                    ${selectedProductColor === color.value ? 'ring-2 ring-offset-1 ring-indigo-500' : 'ring-gray-300'}
+                                    ${color.value === 'white' ? 'border-gray-400' : ''}`}
+                        style={{ backgroundColor: color.hex }}
+                        title={color.name}
+                    >
+                       {selectedProductColor === color.value && <span className="text-xs" style={{color: color.value === 'black' || color.value === 'blue' || color.value === 'red' || color.value === 'green' || color.value === 'grey' ? 'white' : 'black'}}>✓</span>}
+                    </button>
+                ))}
+            </div>
+            {selectedProductColor && <p className="text-xs text-gray-500 mt-1">Таңдалған өң: {availableColors.find(c => c.value === selectedProductColor)?.name}</p>}
+          </div>
+
+          <Button onClick={handleProceedToAddress} className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3 text-lg mt-3">
             Келесі: Адрес енгізу
           </Button>
         </motion.div>
@@ -562,6 +546,7 @@ export default function WebAppShop() {
             <p><span className="font-medium">Аты-жөні:</span> {contactDetails.fullName}</p>
             <p><span className="font-medium">Телефон:</span> {contactDetails.phoneNumber}</p>
             {contactDetails.telegramUserID && <p><span className="font-medium">Telegram UserID (енгізілген):</span> {contactDetails.telegramUserID}</p>}
+            {selectedProductColor && <p><span className="font-medium">Таңдалған өң:</span> {availableColors.find(c => c.value === selectedProductColor)?.name || selectedProductColor}</p>}
             <p className="text-xs text-gray-500 mt-0.5">Telegram контекстінен: @{user?.username || "анықталмаған"} (ID: {user?.id || "анықталмаған"})</p>
           </div>
           <hr className="my-2"/>
