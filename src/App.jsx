@@ -63,9 +63,6 @@ const ensureStringForRender = (value, fieldName = 'unknown field', defaultValue 
   }
 };
 
-// Placeholder QR Code URL - REPLACE THIS WITH YOUR ACTUAL QR CODE IMAGE URL
-const PAYMENT_QR_CODE_URL = "https://placehold.co/300x300/E2E8F0/94A3B8?text=QR+CODE+%C3%9CRNEGI%0A(Kaspi%2C+Halyk+etc)";
-
 // URL for your Google Apps Script Web App
 const APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwLSMYSH2s3uG3CvKOzDXTmaFcA2AoN5J3EPCVHTZXCNszQeZJTh2-UwQoeTPUkO6oI/exec'; // СІЗ БЕРГЕН APPS SCRIPT URL
 const N8N_ADMIN_NOTIFICATION_WEBHOOK_URL = "https://alphabotai.app.n8n.cloud/webhook-test/49eb5226-ed25-40e6-a3fc-272616c5a1a0"; // For admin notifications (optional)
@@ -73,9 +70,10 @@ const N8N_ADMIN_NOTIFICATION_WEBHOOK_URL = "https://alphabotai.app.n8n.cloud/web
 export default function WebAppShop() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
-  const [page, setPage] = useState("catalog");  // "catalog", "cart", "contactInfo", "address", "confirm", "qrPayment"
+  const [page, setPage] = useState("catalog");  // "catalog", "cart", "contactInfo", "address", "confirm", "paymentMethod"
   const [contactDetails, setContactDetails] = useState({ fullName: "", phoneNumber: "", telegramUserID: "" });
   const [address, setAddress] = useState({ city: "", street: "", entrance: "", floor: "", flat: "" });
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("card"); // "card" or "kaspi"
   const [animateAdd, setAnimateAdd] = useState(null);
   const [appLoading, setAppLoading] = useState(true); 
   const [error, setError] = useState(null); 
@@ -276,8 +274,8 @@ export default function WebAppShop() {
     setPage("confirm");
   };
 
-  const proceedToQrPayment = () => {
-    setPage("qrPayment");
+  const proceedToPaymentMethodSelection = () => {
+    setPage("paymentMethod");
   };
 
   const handleOrderSubmission = async () => {
@@ -302,31 +300,24 @@ export default function WebAppShop() {
         deliveryAddress: address, 
         products: cart,
         total: orderTotal,
+        paymentMethod: selectedPaymentMethod, // Таңдалған төлем әдісін қосу
         orderTimestamp: orderTimestamp
     };
 
     console.log("Sending order to Google Apps Script Web App:", orderPayload);
     try {
-      if (!APPS_SCRIPT_WEB_APP_URL || APPS_SCRIPT_WEB_APP_URL === 'СІЗДІҢ_GOOGLE_APPS_SCRIPT_WEB_APP_URL_МЕКЕНЖАЙЫҢЫЗ') { // Check if placeholder is still there
+      if (!APPS_SCRIPT_WEB_APP_URL || APPS_SCRIPT_WEB_APP_URL === 'СІЗДІҢ_GOOGLE_APPS_SCRIPT_WEB_APP_URL_МЕКЕНЖАЙЫҢЫЗ') { 
           throw new Error("Google Apps Script Web App URL конфигурацияланбаған!");
       }
 
       const res = await fetch(APPS_SCRIPT_WEB_APP_URL, {
         method: "POST",
-        // Apps Script Web App-қа POST сұрауын жібергенде, Content-Type қажет болмауы мүмкін,
-        // себебі ол e.postData.contents арқылы алады. Дегенмен, кейде қателерді болдырмау үшін
-        // 'text/plain' немесе 'application/x-www-form-urlencoded' қолданылуы мүмкін.
-        // JSON.stringify() қолданғандықтан, 'application/json' дұрыс болуы керек,
-        // бірақ Apps Script жағында JSON.parse(e.postData.contents) болуы шарт.
         headers: {
-           'Content-Type': 'text/plain;charset=utf-8', // Apps Script-ке жіберу үшін жиі қолданылатын нұсқа
+           'Content-Type': 'text/plain;charset=utf-8', 
         },
-        body: JSON.stringify(orderPayload), // Деректерді JSON жолы ретінде жіберу
-        // mode: 'no-cors', // Бұл жауапты оқуға кедергі келтіреді. Apps Script жағында CORS дұрыс конфигурациялануы керек.
+        body: JSON.stringify(orderPayload), 
       });
 
-      // Apps Script-тен жауапты алу және тексеру
-      // Егер Apps Script ContentService.createTextOutput(JSON.stringify(...)).setMimeType(ContentService.MimeType.JSON) қайтарса:
       if (res.ok) {
         const result = await res.json(); 
         console.log("Successfully sent order to Apps Script, response:", result);
@@ -336,7 +327,6 @@ export default function WebAppShop() {
             alert(`⚠️ Тапсырысты жіберу кезінде Apps Script қатесі: ${result.message || 'Белгісіз қате'}`);
         }
         
-        // Қосымша: Админге хабарлама жіберу үшін n8n-ге деректерді жіберу
         const n8nPayload = { ...orderPayload, appsScriptStatus: result.status, appsScriptMessage: result.message };
         try {
             const n8nRes = await fetch(N8N_ADMIN_NOTIFICATION_WEBHOOK_URL, {
@@ -594,39 +584,67 @@ export default function WebAppShop() {
           <hr className="my-2"/>
           <div className="font-bold text-right text-xl">Жалпы: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</div>
           
-          <Button onClick={proceedToQrPayment} className="w-full bg-purple-700 hover:bg-purple-800 text-white rounded-xl py-3 text-lg mt-3">
-            Төлем жасауға өту (QR)
+          <Button onClick={proceedToPaymentMethodSelection} className="w-full bg-purple-700 hover:bg-purple-800 text-white rounded-xl py-3 text-lg mt-3">
+            Төлем әдісін таңдау
           </Button>
         </motion.div>
       )}
 
-      {page === "qrPayment" && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 bg-gray-50 p-6 rounded-xl shadow-lg text-center">
+      {page === "paymentMethod" && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 bg-gray-50 p-6 rounded-xl shadow-lg">
             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-semibold text-gray-800">Төлем</h2>
+                <h2 className="text-2xl font-semibold text-gray-800">Төлем әдісін таңдаңыз</h2>
                 <Button variant="ghost" onClick={() => setPage("confirm")} className="text-blue-600 hover:bg-blue-50 text-sm">← Растауға оралу</Button>
             </div>
-            <p className="text-gray-700">Төмендегі QR кодты Kaspi.kz немесе басқа банк қосымшасы арқылы сканерлеп, төлем жасаңыз.</p>
-            <div className="flex justify-center my-4">
-                <img 
-                    src={PAYMENT_QR_CODE_URL} 
-                    alt="Төлем QR коды" 
-                    className="w-64 h-64 md:w-72 md:h-72 border-4 border-gray-300 rounded-lg shadow-md"
-                    onError={(e) => {
-                        e.currentTarget.alt = 'QR кодты жүктеу мүмкін болмады';
-                        e.currentTarget.parentNode.innerHTML = '<p class="text-red-500">QR кодты жүктеу мүмкін болмады. Басқа төлем әдісін қолданыңыз немесе әкімшімен хабарласыңыз.</p>';
-                    }}
-                />
+            
+            <div className="space-y-3">
+                <label htmlFor="payment-card" className="flex items-center p-3 border rounded-lg hover:bg-gray-100 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                    <input 
+                        type="radio" 
+                        id="payment-card" 
+                        name="paymentMethod" 
+                        value="card" 
+                        checked={selectedPaymentMethod === "card"}
+                        onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                        className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="ml-3 text-gray-700 font-medium">💳 Карта арқылы төлеу</span>
+                </label>
+                <label htmlFor="payment-kaspi" className="flex items-center p-3 border rounded-lg hover:bg-gray-100 cursor-pointer has-[:checked]:bg-red-50 has-[:checked]:border-red-500">
+                    <input 
+                        type="radio" 
+                        id="payment-kaspi" 
+                        name="paymentMethod" 
+                        value="kaspi" 
+                        checked={selectedPaymentMethod === "kaspi"}
+                        onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                        className="h-4 w-4 text-red-600 border-gray-300 focus:ring-red-500"
+                    />
+                    <span className="ml-3 text-gray-700 font-medium"><img src="https://kaspi.kz/img/misc/logos/ главного-экрана.png" alt="Kaspi Logo" className="inline h-5 w-5 mr-1.5"/>Kaspi арқылы төлеу</span>
+                </label>
             </div>
-            <p className="text-xl font-bold text-gray-800">Төлеуге: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</p>
-            <p className="text-xs text-gray-500 mt-2 mb-4">Төлем жасағаннан кейін, төмендегі батырманы басып, тапсырысыңызды растаңыз.</p>
+
+            {selectedPaymentMethod === "card" && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700">
+                    Картамен төлеу үшін менеджер сізбен хабарласып, төлем сілтемесін жібереді немесе басқа нұсқаулар береді.
+                </div>
+            )}
+            {selectedPaymentMethod === "kaspi" && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+                    Kaspi арқылы төлеу үшін менеджер сізбен хабарласып, Kaspi Gold нөмірін немесе Kaspi QR кодын жібереді.
+                </div>
+            )}
+
+            <p className="text-xl font-bold text-gray-800 text-center mt-4">Төлеуге: {cart.reduce((sum, p) => sum + p.price, 0)} ₸</p>
+            
             <Button 
                 onClick={handleOrderSubmission} 
-                disabled={isSubmittingOrder}
-                className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 text-lg"
+                disabled={isSubmittingOrder || !selectedPaymentMethod}
+                className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl py-3 text-lg mt-4"
             >
-              {isSubmittingOrder ? "Жіберілуде..." : "✅ Мен төледім, тапсырысты жіберу"}
+              {isSubmittingOrder ? "Жіберілуде..." : "✅ Тапсырысты растау және жіберу"}
             </Button>
+             <p className="text-xs text-gray-500 mt-2 text-center">"Растау" батырмасын басқаннан кейін, тапсырысыңыз менеджерге жіберіледі. Таңдаған төлем әдісіңізге байланысты менеджер сізбен хабарласады.</p>
         </motion.div>
       )}
     </div>
