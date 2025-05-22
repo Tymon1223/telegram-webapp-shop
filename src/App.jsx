@@ -86,19 +86,18 @@ export default function WebAppShop() {
   const [contactDetails, setContactDetails] = useState({ fullName: "", phoneNumber: "", telegramUserID: "" });
   const [address, setAddress] = useState({ city: "", street: "", entrance: "", floor: "", flat: "" });
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("card"); // "card" or "kaspi"
-  const [selectedProductColor, setSelectedProductColor] = useState(""); // New state for selected color
+  // selectedProductColor state removed
   const [animateAdd, setAnimateAdd] = useState(null);
   const [appLoading, setAppLoading] = useState(true); 
   const [error, setError] = useState(null); 
   const [userWarning, setUserWarning] = useState(null); 
   const [user, setUser] = useState(null); 
-  // AI Description enhancement state removed: const [enhancingProductId, setEnhancingProductId] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false); 
 
 
   const fetchProducts = async () => {
     try {
-      const productsSheetUrl = `https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1`; // Ensure this is your product sheet
+      const productsSheetUrl = `https://opensheet.elk.sh/1O03ib-iT4vTpJEP5DUOawv96NvQPiirhQSudNEBAtQk/Sheet1`; 
       console.log("Fetching products from:", productsSheetUrl);
       const response = await fetch(productsSheetUrl);
       if (!response.ok) {
@@ -138,8 +137,8 @@ export default function WebAppShop() {
           price: parseInt(item.price, 10) || 0, 
           description: ensureStringForRender(item.description, `item[${index}].description`, "Сипаттамасы жоқ"),
           stock: ensureStringForRender(item.stock, `item[${index}].stock`), 
-          size: ensureStringForRender(item.size, `item[${index}].size`),   // Size is fetched
-          // enhancedDescription removed
+          size: ensureStringForRender(item.size, `item[${index}].size`),   
+          selectedColor: "", // Initialize selectedColor for each product
         };
       });
       setProducts(formatted);
@@ -204,10 +203,28 @@ export default function WebAppShop() {
     initializeApp();
   }, []);
 
-  // handleEnhanceDescription function removed
+  const handleProductColorSelect = (productId, colorValue) => {
+    setProducts(prevProducts =>
+        prevProducts.map(p =>
+            p.id === productId ? { ...p, selectedColor: colorValue } : p
+        )
+    );
+  };
 
   const addToCart = (product) => {
-    setCart((prev) => [...prev, product]);
+    // Find the product from the current products state to get its selectedColor
+    const currentProductState = products.find(p => p.id === product.id);
+    if (!currentProductState?.selectedColor) { 
+        alert(`"${product.name}" үшін өң таңдаңыз.`);
+        return;
+    }
+    // Add product with its selected color to cart
+    // Ensure quantity is handled if products can be added multiple times or if cart manages quantity
+    const cartItem = { 
+        ...currentProductState, // This includes id, name, price, imageURL, description, size, and selectedColor
+        quantity: 1 // Assuming each add to cart is a new item or you handle quantity aggregation elsewhere
+    };
+    setCart((prev) => [...prev, cartItem]);
     setAnimateAdd(product.id);
     setTimeout(() => setAnimateAdd(null), 500);
   };
@@ -226,12 +243,8 @@ export default function WebAppShop() {
         alert("Телефон нөміріңізді енгізіңіз.");
         return;
     }
-    // Color selection is now part of this page
-    if (!selectedProductColor) {
-        alert("Тауардың өңін таңдаңыз.");
-        return;
-    }
-    console.log("Contact details and color confirmed:", contactDetails, selectedProductColor);
+    // Color selection validation removed from here
+    console.log("Contact details confirmed:", contactDetails);
     setPage("address");
   };
   
@@ -250,7 +263,7 @@ export default function WebAppShop() {
 
   const handleOrderSubmission = async () => {
     setIsSubmittingOrder(true);
-    const orderTotal = cart.reduce((sum, p) => sum + p.price, 0);
+    const orderTotal = cart.reduce((sum, p) => sum + (p.price * (p.quantity || 1)), 0); // Ensure quantity is considered
     if (cart.length === 0) {
         alert("Себет бос.");
         setIsSubmittingOrder(false);
@@ -260,6 +273,11 @@ export default function WebAppShop() {
     const clientSideOrderId = `WEBAPP-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const orderTimestamp = new Date().toISOString();
 
+    // Prepare product colors string for Google Sheet "өңі" column
+    const productColorsString = cart.map(item => 
+        `${item.name}: ${availableColors.find(c => c.value === item.selectedColor)?.name || item.selectedColor}`
+    ).join('; ');
+
     const orderPayload = { 
         clientOrderId: clientSideOrderId,
         userContext: { 
@@ -268,10 +286,18 @@ export default function WebAppShop() {
         },
         contactInfo: contactDetails, 
         deliveryAddress: address, 
-        products: cart,
+        products: cart.map(p => ({ // Send only necessary product info to keep payload smaller
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            quantity: p.quantity || 1,
+            size: p.size,
+            selectedColor: p.selectedColor,
+            colorName: availableColors.find(c => c.value === p.selectedColor)?.name || p.selectedColor
+        })),
         total: orderTotal,
         paymentMethod: selectedPaymentMethod,
-        selectedColor: selectedProductColor, // Added selected color
+        productColors: productColorsString, // String of all selected colors for the order
         orderTimestamp: orderTimestamp
     };
 
@@ -314,7 +340,8 @@ export default function WebAppShop() {
         setCart([]); 
         setContactDetails({ fullName: "", phoneNumber: "", telegramUserID: "" }); 
         setAddress({ city: "", street: "", entrance: "", floor: "", flat: "" }); 
-        setSelectedProductColor(""); // Reset selected color
+        // setSelectedProductColor(""); // This state is removed
+        setProducts(prevProducts => prevProducts.map(p => ({ ...p, selectedColor: "" }))); // Reset selected colors on products
         setPage("catalog"); 
       } else {
         const errorText = await res.text(); 
@@ -339,7 +366,7 @@ export default function WebAppShop() {
 
 
   return (
-    <div className="p-4 space-y-4 max-w-md mx-auto pb-20">
+    <div className="p-4 space-y-4 max-w-3xl mx-auto pb-24"> {/* Increased max-width for 3 columns */}
       {userWarning && page === "catalog" && ( 
          <div className="p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 rounded-md text-sm mb-4 shadow">
             <p><span className="font-bold">Ескерту:</span> {userWarning}</p>
@@ -347,7 +374,6 @@ export default function WebAppShop() {
       )}
 
       {page === "catalog" && (
-        // Updated grid layout for 3 columns on md screens and above
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"> 
           {products.map((product) => (
             <motion.div
@@ -355,35 +381,55 @@ export default function WebAppShop() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              className="flex flex-col" // Added for consistent height if needed
+              className="flex flex-col" 
             >
-              <Card className="shadow-xl rounded-2xl overflow-hidden h-full flex flex-col"> {/* Added h-full and flex flex-col */}
-                <CardContent className="p-4 space-y-2 flex flex-col flex-grow"> {/* Added flex-grow */}
+              <Card className="shadow-xl rounded-2xl overflow-hidden h-full flex flex-col"> 
+                <CardContent className="p-3 space-y-1.5 flex flex-col flex-grow"> {/* Adjusted padding and spacing */}
                   <img
                     src={product.imageURL}
                     alt={product.name}
-                    className="w-full h-40 object-cover rounded-xl border" // Adjusted height for 3 columns
+                    className="w-full h-40 object-cover rounded-xl border" 
                     onError={(e) => {
                         e.currentTarget.src = 'https://placehold.co/400x300/E2E8F0/94A3B8?text=Сурет+жоқ';
                         e.currentTarget.alt = 'Сурет жүктелмеді';
                     }}
                   />
-                  <div className="text-lg font-bold text-gray-800 mt-2">{product.name}</div>
-                  <p className="text-gray-600 text-xs min-h-[2.5em] flex-grow">{product.description}</p> {/* Adjusted text size and min-height */}
+                  <div className="text-md font-bold text-gray-800 mt-1.5">{product.name}</div> {/* Adjusted text size */}
+                  <p className="text-gray-600 text-xs min-h-[3em] flex-grow">{product.description}</p> 
                   
-                  {product.size && ( // Display product size if available
+                  {/* Color Selection on Product Card */}
+                  <div className="pt-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-0.5">Өңін таңдаңыз:</label>
+                    <div className="flex flex-wrap gap-1.5">
+                        {availableColors.map(color => (
+                            <button
+                                key={color.value}
+                                type="button"
+                                onClick={() => handleProductColorSelect(product.id, color.value)}
+                                className={`w-6 h-6 rounded-full border-2 focus:outline-none focus:ring-1 focus:ring-offset-1
+                                            ${product.selectedColor === color.value ? 'ring-indigo-500' : 'ring-gray-300'}
+                                            ${color.value === 'white' ? 'border-gray-400' : ''}`}
+                                style={{ backgroundColor: color.hex }}
+                                title={color.name}
+                            >
+                               {product.selectedColor === color.value && <span className="text-xs" style={{color: color.value === 'black' || color.value === 'blue' || color.value === 'red' || color.value === 'green' || color.value === 'grey' ? 'white' : 'black'}}>✓</span>}
+                            </button>
+                        ))}
+                    </div>
+                    {product.selectedColor && <p className="text-xs text-gray-500 mt-0.5">Таңдалған: {availableColors.find(c => c.value === product.selectedColor)?.name}</p>}
+                  </div>
+
+                  {product.size && ( 
                     <p className="text-xs text-gray-500 mt-1">Өлшемі: {product.size}</p>
                   )}
 
-                  <div className="text-md font-semibold text-green-600 mt-1">{product.price} ₸</div>
+                  <div className="text-lg font-semibold text-green-600 mt-1">{product.price} ₸</div> {/* Adjusted text size */}
                   
-                  {/* AI Description enhancement button removed */}
-
                   <motion.div
                     whileTap={{ scale: 0.98 }} 
                     animate={animateAdd === product.id ? { scale: [1, 1.05, 1] } : {}} 
                     transition={{ duration: 0.3 }}
-                    className="mt-auto pt-2" // Added mt-auto to push button to bottom
+                    className="mt-auto pt-2" 
                   >
                     <Button onClick={() => addToCart(product)} className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white py-2 text-sm"> 
                       Себетке қосу
@@ -395,7 +441,7 @@ export default function WebAppShop() {
           ))}
 
           {products.length > 0 && ( 
-            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-50 md:col-span-3 sm:col-span-2 col-span-1"> {/* Ensure button spans full width below grid */}
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-[calc(100%-2rem)] max-w-md z-50 md:col-span-3 sm:col-span-2 col-span-1"> 
               <Button onClick={() => {
                   if (cart.length === 0) {
                       alert("Себет бос. Алдымен өнім қосыңыз.");
@@ -426,7 +472,9 @@ export default function WebAppShop() {
             cart.map((item, idx) => (
               <div key={idx} className="border p-3 rounded-xl bg-white shadow flex justify-between items-center">
                 <div>
-                    <span className="font-medium">{item.name}</span> — <span className="font-semibold">{item.price} ₸</span>
+                    <span className="font-medium">{item.name}</span>
+                    {item.selectedColor && <span className="text-sm text-gray-600"> ({availableColors.find(c => c.value === item.selectedColor)?.name || item.selectedColor})</span>}
+                     — <span className="font-semibold">{item.price} ₸</span>
                 </div>
               </div>
             ))
@@ -440,7 +488,7 @@ export default function WebAppShop() {
         </motion.div>
       )}
 
-      {page === "contactInfo" && (
+      {page === "contactInfo" && ( // Color selection removed from this page
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-semibold">Байланыс ақпараты</h2>
@@ -468,28 +516,6 @@ export default function WebAppShop() {
               UserID-іңізді білмесеңіз, Telegram-да <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">@userinfobot</a>-қа `/start` деп жазып біле аласыз. Бұл бізге сізбен байланысуға көмектеседі.
             </p>
           </div>
-          {/* Color Selection Section */}
-          <div className="pt-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Тауардың өңін таңдаңыз *</label>
-            <div className="flex flex-wrap gap-2">
-                {availableColors.map(color => (
-                    <button
-                        key={color.value}
-                        type="button"
-                        onClick={() => setSelectedProductColor(color.value)}
-                        className={`w-8 h-8 rounded-full border-2 focus:outline-none focus:ring-2 focus:ring-offset-1
-                                    ${selectedProductColor === color.value ? 'ring-2 ring-offset-1 ring-indigo-500' : 'ring-gray-300'}
-                                    ${color.value === 'white' ? 'border-gray-400' : ''}`}
-                        style={{ backgroundColor: color.hex }}
-                        title={color.name}
-                    >
-                       {selectedProductColor === color.value && <span className="text-xs" style={{color: color.value === 'black' || color.value === 'blue' || color.value === 'red' || color.value === 'green' || color.value === 'grey' ? 'white' : 'black'}}>✓</span>}
-                    </button>
-                ))}
-            </div>
-            {selectedProductColor && <p className="text-xs text-gray-500 mt-1">Таңдалған өң: {availableColors.find(c => c.value === selectedProductColor)?.name}</p>}
-          </div>
-
           <Button onClick={handleProceedToAddress} className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3 text-lg mt-3">
             Келесі: Адрес енгізу
           </Button>
@@ -546,7 +572,6 @@ export default function WebAppShop() {
             <p><span className="font-medium">Аты-жөні:</span> {contactDetails.fullName}</p>
             <p><span className="font-medium">Телефон:</span> {contactDetails.phoneNumber}</p>
             {contactDetails.telegramUserID && <p><span className="font-medium">Telegram UserID (енгізілген):</span> {contactDetails.telegramUserID}</p>}
-            {selectedProductColor && <p><span className="font-medium">Таңдалған өң:</span> {availableColors.find(c => c.value === selectedProductColor)?.name || selectedProductColor}</p>}
             <p className="text-xs text-gray-500 mt-0.5">Telegram контекстінен: @{user?.username || "анықталмаған"} (ID: {user?.id || "анықталмаған"})</p>
           </div>
           <hr className="my-2"/>
@@ -562,7 +587,7 @@ export default function WebAppShop() {
           <p className="font-semibold text-md">Тауарлар:</p>
           {cart.map((item, idx) => (
             <div key={idx} className="text-sm flex justify-between">
-              <span>{item.name}</span>
+              <span>{item.name} {item.selectedColor ? `(${availableColors.find(c => c.value === item.selectedColor)?.name || item.selectedColor})` : ''}</span>
               <span>{item.price} ₸</span>
             </div>
           ))}
